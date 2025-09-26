@@ -3,1367 +3,564 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sarita Vijay Express - AI Powered Grocery</title>
+    <title>Sarita Groceries</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Chosen Palette: Slate Gray, Electric Blue (#3b82f6), Accent Green (#10B981), Subtle Gradients -->
-    <!-- Application Structure Plan: The application is a Single-Page App (SPA) that dynamically switches between a 'Homepage View' for discovery and a 'Product Listing Page (PLP) View' for focused browsing. This structure was chosen to provide a seamless, app-like user experience without page reloads, directly implementing the blueprint's vision for a modern e-commerce platform. Navigation is handled by JavaScript, which shows/hides the relevant content sections based on user actions like searching or clicking a category. This approach maximizes performance and user engagement. -->
-    <!-- Visualization & Content Choices: 
-        - New Feature (Editable Products): Goal(Manage) -> Presentation(A new admin tab with a product table and an add/edit modal) -> Interaction(Admin can create, update, and delete products, with changes saved to localStorage) -> Justification(Provides full control over the store's inventory, a critical e-commerce feature) -> Library/Method(Vanilla JS).
-        - New Feature (AI Knowledge Base): Goal(Inform/Assist) -> Presentation(Conversational AI chatbot) -> Interaction(AI is given the full product list in its prompt and can answer user questions about product availability and price in Hindi) -> Justification(Transforms the chatbot from a simple command taker to a knowledgeable assistant, greatly improving user experience) -> Library/Method(Fetch API to Gemini).
-        - New Feature (Pixabay Images): Goal(Enhance Visuals) -> Presentation(Product images in cards) -> Interaction(Images are lazy-loaded via Pixabay API as user scrolls, using a request queue for stability) -> Justification(Provides realistic, high-quality visuals, making the store more appealing and professional) -> Library/Method(Fetch API to Pixabay).
-    -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { font-family: 'Poppins', sans-serif; background-color: #f8fafc; }
-        .bg-brand-blue { background-color: #3b82f6; }
-        .text-brand-blue { color: #3b82f6; }
-        .bg-brand-green { background-color: #10B981; }
-        .text-brand-green { color: #10B981; }
-        .border-brand-blue { border-color: #3b82f6; }
-        .horizontal-scroll { -ms-overflow-style: none; scrollbar-width: none; }
-        .horizontal-scroll::-webkit-scrollbar { display: none; }
-        .product-card, .category-btn { transition: transform 0.3s ease, box-shadow 0.3s ease; }
-        .product-card:hover, .category-btn:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1); }
-        .modal-backdrop { transition: opacity 0.3s ease; }
-        .modal-content { transition: transform 0.3s ease; }
-        #voice-control-btn.listening { animation: pulse 1.5s infinite; }
-        .section-header {
-            background: linear-gradient(90deg, #3b82f6, #10B981);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+        :root {
+            --primary-green: #22c55e;
+            --light-green: #f0fdf4;
+            --dark-text: #1f2937;
+            --light-text: #6b7280;
+            --bg-color: #f7fef9;
+            --border-color: #f3f4f6;
         }
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-            70% { box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        body {
+            font-family: 'Manrope', sans-serif;
+            background-image: linear-gradient(120deg, #fdfbfb 0%, #ebedee 100%);
         }
-        .admin-nav-btn {
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            font-weight: 600;
-            transition: background-color 0.3s, color 0.3s;
+        .page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+            overflow-y: auto;
+            background-color: transparent;
         }
-        .admin-nav-btn.active {
-            background-color: #3b82f6;
-            color: white;
+        .page-main { transform: translateX(0); z-index: 10; }
+        .page-detail { transform: translateX(100%); z-index: 20; background-color: white; }
+        .page.active { transform: translateX(0); }
+        .loader { border: 4px solid #e5e7eb; border-top: 4px solid var(--primary-green); border-radius: 50%; width: 32px; height: 32px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .toast {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease-out;
         }
-        .admin-nav-btn:not(.active) {
-            color: #475569;
-            background-color: #e2e8f0;
-        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .checkout-step { display: none; }
+        .checkout-step.active { display: block; animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .slide { display: none; animation: fade 1.5s ease-in-out; }
+        @keyframes fade { from {opacity: .4} to {opacity: 1} }
+        
+        .category-icon { transition: transform 0.2s ease-in-out; }
+        .category-icon:hover { transform: scale(1.1); }
+        .add-to-cart-btn { transition: transform 0.2s, background-color 0.2s; }
+        .add-to-cart-btn:active { transform: scale(0.9); }
     </style>
 </head>
-<body class="bg-slate-50">
-
-    <div id="app" class="text-slate-800">
-
-        <header class="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
-            <nav class="container mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
-                <div id="logo-container" class="flex items-center cursor-pointer">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-slate-700 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    <a href="#" id="home-link" class="text-xl md:text-2xl font-bold text-slate-800">Sarita Vijay Express</a>
-                </div>
-                <div class="flex-1 max-w-xl mx-4">
-                    <input id="search-bar" type="text" placeholder="Search with text or voice..." class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue">
-                </div>
-                <div class="flex items-center space-x-4">
-                    <button id="wishlist-btn" class="font-semibold text-slate-600 hover:text-brand-blue transition">Wishlist</button>
-                    <button id="my-orders-btn" class="font-semibold text-slate-600 hover:text-brand-blue transition">My Orders</button>
-                    <div id="cart-icon-container" class="relative cursor-pointer">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                        </svg>
-                        <span id="cart-badge" class="absolute -top-2 -right-2 bg-brand-blue text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">0</span>
-                    </div>
-                </div>
-            </nav>
-        </header>
-
-        <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div id="homepage-view">
-                <section id="hero-section" class="relative w-full h-64 md:h-96 rounded-xl overflow-hidden shadow-lg mb-12">
-                     <img class="w-full h-full object-cover" src="https://placehold.co/1200x400/3b82f6/ffffff?text=AI-Powered+Shopping" alt="AI Shopping">
-                     <div class="absolute inset-0 bg-black bg-opacity-40 flex flex-col justify-center items-center text-white p-4 text-center">
-                        <h2 class="text-3xl md:text-5xl font-bold">AI-Powered Grocery Shopping</h2>
-                        <p class="text-lg md:text-xl mt-2">Your Daily Essentials, Reimagined!</p>
-                     </div>
-                </section>
-
-                <section id="deal-of-the-day-section" class="mb-12"></section>
-
-                <section id="category-grid" class="mb-12">
-                     <h3 class="text-3xl font-bold mb-6 text-center section-header">Shop by Category</h3>
-                    <div id="category-container" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-4 md:gap-6">
-                    </div>
-                </section>
-
-                <section id="specials-section" class="mb-12">
-                    <h3 class="text-3xl font-bold mb-6 text-center section-header">Today's Specials</h3>
-                    <div id="specials-container" class="flex overflow-x-auto space-x-4 pb-4 horizontal-scroll">
-                    </div>
-                </section>
-                
-                <section id="ai-recommendations-section" class="mb-12 bg-white p-6 rounded-xl shadow-md hidden">
-                    <h3 class="text-3xl font-bold mb-6 text-center section-header">AI-Powered Recommendations</h3>
-                    <div id="ai-recommendations-container" class="flex overflow-x-auto space-x-4 pb-4 horizontal-scroll">
-                    </div>
-                </section>
-
-                <section id="brand-story" class="bg-white p-8 rounded-xl shadow-md flex flex-col md:flex-row items-center">
-                    <img src="https://placehold.co/400x400/e0e0e0/343A40?text=Friendly+Shopkeeper" class="w-48 h-48 rounded-full object-cover mb-6 md:mb-0 md:mr-8">
-                    <div class="text-center md:text-left">
-                        <h3 class="text-2xl font-bold text-slate-800">Serving Our Community for 20 Years.</h3>
-                        <p class="mt-2 text-slate-600">Sarita Vijay General Store is your trusted neighbourhood partner. We are committed to bringing you the best quality products with the convenience you deserve.</p>
-                    </div>
-                </section>
-            </div>
-
-            <div id="plp-view" class="hidden">
-                 <div class="flex justify-start items-center mb-4">
-                     <button id="back-to-home-btn" class="flex items-center text-slate-600 hover:text-slate-900 font-semibold">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
-                        Back to Home
-                     </button>
-                 </div>
-                 <div class="flex flex-col md:flex-row gap-8">
-                    <aside class="w-full md:w-1/4">
-                        <h3 class="text-xl font-bold mb-4">Filters</h3>
-                        <div class="bg-white p-4 rounded-lg shadow sticky top-24">
-                            <div class="mb-4">
-                                <label for="sort-by" class="block text-sm font-medium text-slate-700">Sort by</label>
-                                <select id="sort-by" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue sm:text-sm rounded-md">
-                                    <option value="relevance">Relevance</option>
-                                    <option value="price-asc">Price: Low to High</option>
-                                    <option value="price-desc">Price: High to Low</option>
-                                </select>
-                            </div>
-                             <div>
-                                <h4 class="text-sm font-medium text-slate-700 mb-2">Sub-Category</h4>
-                                <div id="subcategory-filter-container" class="space-y-2 max-h-60 overflow-y-auto">
-                                </div>
-                            </div>
-                        </div>
-                    </aside>
-                    <div class="w-full md:w-3/4">
-                         <h2 id="plp-title" class="text-3xl font-bold mb-4 section-header">Products</h2>
-                         <div id="plp-product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                         </div>
-                    </div>
-                </div>
-            </div>
-
-             <div id="my-orders-view" class="hidden">
-                <div class="flex justify-start items-center mb-4">
-                     <button id="back-to-home-from-orders-btn" class="flex items-center text-slate-600 hover:text-slate-900 font-semibold">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
-                        Back to Home
-                     </button>
-                 </div>
-                 <h2 class="text-3xl font-bold mb-6 section-header">My Orders</h2>
-                 <div id="orders-list-container" class="space-y-4"></div>
-            </div>
-
-            <div id="wishlist-view" class="hidden">
-                <div class="flex justify-start items-center mb-4">
-                     <button id="back-to-home-from-wishlist-btn" class="flex items-center text-slate-600 hover:text-slate-900 font-semibold">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
-                        Back to Home
-                     </button>
-                 </div>
-                 <h2 class="text-3xl font-bold mb-6 section-header">My Wishlist</h2>
-                 <div id="wishlist-product-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></div>
-            </div>
-        </main>
+<body>
+    <div id="global-loader" class="fixed inset-0 z-[200] flex items-center justify-center bg-white/80 backdrop-blur-sm">
+        <div class="loader"></div>
     </div>
-
-    <div id="cart-modal" class="fixed inset-0 z-[100] flex items-center justify-center hidden">
-        <div id="cart-backdrop" class="absolute inset-0 bg-black bg-opacity-50 modal-backdrop"></div>
-        <div id="cart-content" class="bg-white rounded-lg shadow-2xl w-full max-w-lg m-4 transform scale-95 modal-content">
-            <div class="flex justify-between items-center p-4 border-b">
-                <h3 class="text-xl font-bold">Your Cart</h3>
-                <button id="close-cart-btn" class="text-2xl">&times;</button>
-            </div>
-            <div id="cart-items-container" class="p-4 max-h-[60vh] overflow-y-auto"></div>
-            <div id="cart-summary" class="p-4 border-t bg-slate-50"></div>
-        </div>
-    </div>
+    <div id="toast-notification" class="toast fixed bottom-20 right-5 z-[200]"></div>
     
-    <div id="order-placed-modal" class="fixed inset-0 z-[100] flex items-center justify-center hidden bg-black bg-opacity-75">
-        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm text-center">
-            <h3 class="text-2xl font-bold mb-4 text-brand-green">Order Placed!</h3>
-            <p class="text-slate-600 mb-6">Your order is awaiting confirmation from the store. You can track its status in the "My Orders" section.</p>
-            <button id="close-order-placed-modal-btn" class="w-full bg-slate-800 text-white py-2 rounded-lg font-semibold hover:bg-slate-700 transition">OK</button>
-        </div>
-    </div>
-
-    <div id="product-detail-modal" class="fixed inset-0 z-[100] flex items-center justify-center hidden bg-black bg-opacity-75">
-        <div id="product-detail-content" class="bg-white rounded-lg shadow-2xl w-full max-w-2xl m-4 transform scale-95 modal-content relative">
-             <button id="close-product-detail-btn" class="absolute top-2 right-2 text-3xl text-slate-500 hover:text-slate-800">&times;</button>
-             <div id="product-detail-body" class="p-6"></div>
-        </div>
-    </div>
-
-
-    <div id="admin-login-modal" class="fixed inset-0 z-[100] flex items-center justify-center hidden bg-black bg-opacity-75">
-        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm">
-            <h3 class="text-2xl font-bold mb-4 text-center">Admin Login</h3>
-            <form id="admin-login-form">
-                <input type="text" id="admin-username" placeholder="Username" class="w-full mb-4 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue" required>
-                <input type="password" id="admin-password" placeholder="Password" class="w-full mb-4 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue" required>
-                <button type="submit" class="w-full bg-slate-800 text-white py-2 rounded-lg font-semibold hover:bg-slate-700 transition">Login</button>
-                <p id="admin-login-error" class="text-red-500 text-sm mt-2 text-center"></p>
-            </form>
-        </div>
-    </div>
-
-    <div id="admin-dashboard-view" class="hidden p-4 md:p-8">
-        <div class="flex justify-between items-center mb-6">
-             <h2 class="text-3xl font-bold">Admin Dashboard</h2>
-             <button id="admin-logout-btn" class="bg-red-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition">Logout</button>
-        </div>
-        <div class="flex space-x-4 border-b mb-6">
-            <button id="admin-nav-orders" class="admin-nav-btn active">Orders</button>
-            <button id="admin-nav-dashboard" class="admin-nav-btn">Sales Dashboard</button>
-            <button id="admin-nav-products" class="admin-nav-btn">Products</button>
-            <button id="admin-nav-settings" class="admin-nav-btn">Settings</button>
-        </div>
-        
-        <div id="admin-orders-panel">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="bg-orange-100 p-4 rounded-lg"><h3 class="font-bold text-lg mb-4 text-orange-800">PENDING CONFIRMATION</h3><div id="pending-orders-column" class="space-y-4"></div></div>
-                <div class="bg-yellow-100 p-4 rounded-lg"><h3 class="font-bold text-lg mb-4 text-yellow-800">PREPARING</h3><div id="preparing-orders-column" class="space-y-4"></div></div>
-                <div class="bg-green-100 p-4 rounded-lg"><h3 class="font-bold text-lg mb-4 text-green-800">COMPLETED</h3><div id="completed-orders-column" class="space-y-4"></div></div>
-            </div>
-        </div>
-
-        <div id="admin-sales-panel" class="hidden">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <div class="bg-white p-6 rounded-lg shadow"><h4 class="text-slate-500 font-semibold">Total Revenue</h4><p id="stats-total-revenue" class="text-3xl font-bold mt-2">₹0.00</p></div>
-                <div class="bg-white p-6 rounded-lg shadow"><h4 class="text-slate-500 font-semibold">Completed Orders</h4><p id="stats-total-orders" class="text-3xl font-bold mt-2">0</p></div>
-                <div class="bg-white p-6 rounded-lg shadow"><h4 class="text-slate-500 font-semibold">Avg. Order Value</h4><p id="stats-avg-order-value" class="text-3xl font-bold mt-2">₹0.00</p></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-white p-6 rounded-lg shadow">
-                    <h4 class="text-slate-500 font-semibold mb-3">Best-Selling Products</h4>
-                    <ul id="stats-best-sellers" class="space-y-2"></ul>
+    <div class="relative max-w-sm mx-auto border-x h-screen overflow-hidden bg-white shadow-2xl">
+        <!-- Main Page -->
+        <div id="page-main" class="page page-main active">
+            <!-- Header -->
+            <header class="p-4 flex justify-between items-center bg-white">
+                <button id="my-orders-btn"><i data-lucide="user-circle-2"></i></button>
+                <div class="text-center">
+                    <h1 class="font-bold" id="header-store-name">Sarita Groceries</h1>
+                    <span class="text-sm text-gray-500 flex items-center gap-1"><i data-lucide="map-pin" class="w-4 h-4"></i> Sanchore, Rajasthan</span>
                 </div>
-                <div class="bg-white p-6 rounded-lg shadow">
-                    <h4 class="text-slate-500 font-semibold mb-3">AI Marketing Tips</h4>
-                    <ul id="stats-ai-tips" class="space-y-3 text-sm"></ul>
-                </div>
-            </div>
-        </div>
-
-        <div id="admin-products-panel" class="hidden">
-            <div class="flex justify-end mb-4">
-                <button id="add-new-product-btn" class="bg-brand-blue text-white font-semibold px-4 py-2 rounded-lg hover:bg-blue-600">Add New Product</button>
-            </div>
-            <div class="bg-white shadow rounded-lg overflow-x-auto">
-                <table class="w-full text-sm text-left text-slate-500">
-                    <thead class="text-xs text-slate-700 uppercase bg-slate-50">
-                        <tr>
-                            <th scope="col" class="px-6 py-3">Product Name</th>
-                            <th scope="col" class="px-6 py-3">Category</th>
-                            <th scope="col" class="px-6 py-3">Price</th>
-                            <th scope="col" class="px-6 py-3">Stock</th>
-                            <th scope="col" class="px-6 py-3">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="admin-product-list">
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div id="admin-settings-panel" class="hidden">
-             <div class="max-w-md bg-white p-6 rounded-lg shadow">
-                <h3 class="text-xl font-bold mb-4">Store Settings</h3>
-                <div class="space-y-4">
-                    <div>
-                        <label for="delivery-charge-input" class="block text-sm font-medium text-slate-700">Delivery Charge (₹)</label>
-                        <input type="number" id="delivery-charge-input" class="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-blue focus:border-brand-blue">
-                    </div>
-                    <div class="flex justify-end">
-                         <button id="save-settings-btn" class="bg-brand-blue text-white font-semibold px-4 py-2 rounded-lg hover:bg-blue-600">Save Settings</button>
-                    </div>
-                </div>
-             </div>
-        </div>
-    </div>
-
-     <div id="product-form-modal" class="fixed inset-0 z-[100] flex items-center justify-center hidden bg-black bg-opacity-75">
-        <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg m-4 transform scale-95 modal-content relative">
-             <button id="close-product-form-btn" class="absolute top-2 right-2 text-3xl text-slate-500 hover:text-slate-800">&times;</button>
-             <form id="product-form" class="p-6 space-y-4">
-                <h3 id="product-form-title" class="text-xl font-bold">Add New Product</h3>
-                <input type="hidden" id="product-id-input">
-                <div><label for="productName" class="block text-sm font-medium">Name</label><input type="text" id="productName" class="w-full border-slate-300 rounded-md" required></div>
-                <div><label for="category" class="block text-sm font-medium">Category</label><input type="text" id="category" class="w-full border-slate-300 rounded-md" required></div>
-                <div><label for="subCategory" class="block text-sm font-medium">Sub-Category</label><input type="text" id="subCategory" class="w-full border-slate-300 rounded-md" required></div>
-                 <div><label for="description" class="block text-sm font-medium">Description</label><textarea id="description" class="w-full border-slate-300 rounded-md" rows="3" required></textarea></div>
-                <div><label for="price_INR" class="block text-sm font-medium">Price (₹)</label><input type="number" id="price_INR" class="w-full border-slate-300 rounded-md" required></div>
-                <div><label for="googleImageQuery" class="block text-sm font-medium">Image Search Term</label><input type="text" id="googleImageQuery" class="w-full border-slate-300 rounded-md" required></div>
-                <div><label for="stockStatus" class="block text-sm font-medium">Stock Status</label><select id="stockStatus" class="w-full border-slate-300 rounded-md"><option>In Stock</option><option>Out of Stock</option></select></div>
-                <div class="flex justify-end"><button type="submit" class="bg-brand-blue text-white font-semibold px-4 py-2 rounded-lg hover:bg-blue-600">Save Product</button></div>
-             </form>
-        </div>
-    </div>
-
-    <div id="ai-bot-ui" class="fixed bottom-5 right-5 z-50 flex items-center space-x-3">
-        <div class="bg-white p-2 rounded-full shadow-lg text-sm font-semibold text-slate-600">
-            नमस्ते! बोल कर ऑर्डर करें
-        </div>
-        <button id="voice-control-btn" class="w-16 h-16 bg-brand-green text-white rounded-full flex items-center justify-center shadow-2xl hover:bg-green-600 transition transform hover:scale-110">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
-            </svg>
-        </button>
-        <div id="ai-status" class="absolute bottom-20 right-0 bg-black bg-opacity-70 text-white text-sm rounded-lg px-3 py-1 hidden whitespace-nowrap"></div>
-    </div>
-    
-    <!-- Firebase SDKs -->
-    <script type="module">
-        // Import Firebase modules
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-        // --- Firebase Configuration ---
-        // These global variables (__app_id, __firebase_config, __initial_auth_token) are provided by the environment.
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        let db, auth, userId;
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
-        
-        // --- App State ---
-        const initialProducts = [
-          { "productID": "SVGS-1001", "productName": "Amul Gold Full Cream Milk", "category": "Dairy & Breads", "subCategory": "Milk", "description": "Rich and creamy full-fat milk, perfect for making tea, coffee, and desserts.", "googleImageQuery": "Amul Gold milk packet", "price_INR": 66, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1002", "productName": "Aashirvaad Shudh Chakki Atta", "category": "Staples", "subCategory": "Flour", "description": "Made from the choicest grains, this whole wheat atta makes soft, fluffy rotis.", "googleImageQuery": "Aashirvaad atta 10kg", "price_INR": 410, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1003", "productName": "Tata Salt", "category": "Staples", "subCategory": "Salt & Sugar", "description": "India's first iodized salt, providing essential iodine for mental and physical development.", "googleImageQuery": "Tata Salt 1kg", "price_INR": 28, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1004", "productName": "Lay's India's Magic Masala", "category": "Snacks & Beverages", "subCategory": "Chips", "description": "The classic potato chip with a magical blend of Indian spices.", "googleImageQuery": "Lays India's Magic Masala chips", "price_INR": 20, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1005", "productName": "Lifebuoy Total 10 Germ Protection Soap", "category": "Personal Care", "subCategory": "Soap", "description": "Get 100% stronger germ protection with this iconic red soap bar.", "googleImageQuery": "Lifebuoy Total 10 soap", "price_INR": 36, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1006", "productName": "Surf Excel Easy Wash Detergent Powder", "category": "Cleaning & Household", "subCategory": "Detergent", "description": "Removes tough stains easily with its superior technology.", "googleImageQuery": "Surf Excel Easy Wash powder", "price_INR": 140, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1007", "productName": "Cycle Pure Agarbathies - Three in One", "category": "Pooja Needs", "subCategory": "Incense Sticks", "description": "A unique blend of three captivating fragrances for a serene pooja experience.", "googleImageQuery": "Cycle Pure Three in One Agarbatti", "price_INR": 70, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1008", "productName": "Stainless Steel Tea Spoon", "category": "Utensils", "subCategory": "Cutlery", "description": "Durable and simple stainless steel spoon for daily use.", "googleImageQuery": "stainless steel tea spoon", "price_INR": 15, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1009", "productName": "Amul Butter", "category": "Dairy & Breads", "subCategory": "Butter & Cheese", "description": "The utterly butterly delicious taste of Amul butter.", "googleImageQuery": "Amul Butter 100g", "price_INR": 55, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1010", "productName": "Maggi 2-Minute Noodles Masala", "category": "Snacks & Beverages", "subCategory": "Instant Noodles", "description": "India's favorite instant noodles. Ready in just two minutes.", "googleImageQuery": "Maggi 2-Minute Noodles", "price_INR": 14, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1011", "productName": "Fortune Sun Lite Refined Sunflower Oil", "category": "Staples", "subCategory": "Oil & Ghee", "description": "Light, healthy, and nutritious sunflower oil that keeps your food light.", "googleImageQuery": "Fortune Sun Lite Sunflower Oil", "price_INR": 155, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1012", "productName": "Britannia Good Day Cashew Cookies", "category": "Snacks & Beverages", "subCategory": "Biscuits", "description": "Melt-in-your-mouth cookies filled with the goodness of cashews.", "googleImageQuery": "Britannia Good Day Cashew cookies", "price_INR": 40, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1013", "productName": "Colgate MaxFresh Toothpaste", "category": "Personal Care", "subCategory": "Oral Care", "description": "Unleash an intense rush of freshness with cooling crystals.", "googleImageQuery": "Colgate MaxFresh toothpaste", "price_INR": 98, "stockStatus": "In Stock" },
-          { "productID": "SVGS-1014", "productName": "Lizol Disinfectant Floor Cleaner - Citrus", "category": "Cleaning & Household", "subCategory": "Floor Cleaner", "description": "Kills 99.9% of germs and leaves a pleasant citrus fragrance.", "googleImageQuery": "Lizol Floor Cleaner Citrus", "price_INR": 102, "stockStatus": "Out of Stock" },
-          { "productID": "SVGS-1015", "productName": "Tata Tea Gold", "category": "Snacks & Beverages", "subCategory": "Tea & Coffee", "description": "A perfect blend for a rich taste and an irresistible aroma.", "googleImageQuery": "Tata Tea Gold", "price_INR": 290, "stockStatus": "In Stock" }
-        ];
-
-        let products = [];
-        let cart = {};
-        let wishlist = [];
-        let storeSettings = { deliveryCharge: 0 };
-        let orders = [];
-        let currentFilters = { searchTerm: '', category: null, subCategories: [], sortBy: 'relevance' };
-        let logoClickCount = 0;
-        let adminLoggedIn = false;
-        
-        const geminiApiKey = 'AIzaSyCnbGU3QT_s1lSjJ3RX78EFv2ymh5L-w_o';
-        const pixabayApiKey = '52276142-c85a50246575a001b3464df58';
-        
-        const mainContent = document.querySelector('main');
-        const homepageView = document.getElementById('homepage-view');
-        const plpView = document.getElementById('plp-view');
-        const myOrdersView = document.getElementById('my-orders-view');
-        const wishlistView = document.getElementById('wishlist-view');
-        const adminLoginModal = document.getElementById('admin-login-modal');
-        const adminDashboardView = document.getElementById('admin-dashboard-view');
-        const orderPlacedModal = document.getElementById('order-placed-modal');
-        const productDetailModal = document.getElementById('product-detail-modal');
-        const productFormModal = document.getElementById('product-form-modal');
-        const newOrderSound = new Audio('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
-        const imageRequestQueue = [];
-        let isFetchingImage = false;
-
-        // --- Firebase References ---
-        let userDataRef;
-        const productsRef = collection(db, `/artifacts/${appId}/public/data/products`);
-        const settingsRef = doc(db, `/artifacts/${appId}/public/data/settings/store`);
-        const ordersRef = collection(db, `/artifacts/${appId}/public/data/orders`);
-
-        // --- Auth State Change Listener ---
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                userId = user.uid;
-                userDataRef = doc(db, `/artifacts/${appId}/users/${userId}/userData/data`);
-                
-                // Once authenticated, setup real-time listeners for all data
-                setupListeners();
-            }
-        });
-
-        // --- App Initialization ---
-        document.addEventListener('DOMContentLoaded', async () => {
-            if (initialAuthToken) {
-                await signInWithCustomToken(auth, initialAuthToken);
-            } else {
-                await signInAnonymously(auth);
-            }
-            setupEventListeners();
-        });
-
-        async function seedInitialProducts() {
-            const batch = writeBatch(db);
-            initialProducts.forEach(product => {
-                const docRef = doc(productsRef, product.productID);
-                batch.set(docRef, product);
-            });
-            await batch.commit();
-        }
-
-        function setupListeners() {
-            // Product listener
-            onSnapshot(query(productsRef), async (snapshot) => {
-                if (snapshot.empty) {
-                    await seedInitialProducts(); // Seed only if the collection is empty
-                } else {
-                    products = snapshot.docs.map(doc => doc.data());
-                    renderAll(); // Re-render UI with fresh product data
-                    applyFiltersAndRender(); // Re-apply any active filters
-                }
-            });
-
-            // User data (cart & wishlist) listener
-            onSnapshot(userDataRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    cart = data.cart || {};
-                    wishlist = data.wishlist || [];
-                } else {
-                    // Initialize user data if it doesn't exist
-                    setDoc(userDataRef, { cart: {}, wishlist: [] });
-                }
-                updateCartBadge();
-                updateWishlistHeartIcons();
-                renderAiRecommendations();
-                // If cart modal is open, re-render it
-                if (!document.getElementById('cart-modal').classList.contains('hidden')) {
-                    renderCart();
-                }
-            });
-
-            // Settings listener
-            onSnapshot(settingsRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    storeSettings = docSnap.data();
-                } else {
-                    // Initialize settings if they don't exist
-                    setDoc(settingsRef, { deliveryCharge: 0 });
-                }
-                if(!adminDashboardView.classList.contains('hidden')) {
-                    renderSettings();
-                }
-            });
-
-            // Orders listener
-            onSnapshot(query(ordersRef), (snapshot) => {
-                orders = snapshot.docs.map(doc => doc.data());
-                if (!myOrdersView.classList.contains('hidden')) {
-                    renderMyOrders();
-                }
-                if (!adminDashboardView.classList.contains('hidden')) {
-                    renderAdminDashboard();
-                    renderSalesDashboard();
-                }
-            });
-        }
-        
-        function renderAll() {
-            renderDealOfTheDay();
-            renderCategories();
-            renderSpecials();
-            updateCartBadge();
-            updateWishlistHeartIcons();
-            lazyLoadImages();
-        }
-
-        function setupEventListeners() {
-            document.getElementById('search-bar').addEventListener('input', (e) => {
-                currentFilters.searchTerm = e.target.value;
-                applyFiltersAndRender();
-            });
-            document.getElementById('home-link').addEventListener('click', (e) => { e.preventDefault(); showHomepageView(); });
-            document.getElementById('back-to-home-btn').addEventListener('click', showHomepageView);
-            document.getElementById('back-to-home-from-orders-btn').addEventListener('click', showHomepageView);
-            document.getElementById('back-to-home-from-wishlist-btn').addEventListener('click', showHomepageView);
-            document.getElementById('sort-by').addEventListener('change', (e) => {
-                currentFilters.sortBy = e.target.value;
-                applyFiltersAndRender();
-            });
-            document.getElementById('cart-icon-container').addEventListener('click', toggleCartModal);
-            document.getElementById('close-cart-btn').addEventListener('click', toggleCartModal);
-            document.getElementById('cart-backdrop').addEventListener('click', toggleCartModal);
-            document.getElementById('my-orders-btn').addEventListener('click', showMyOrdersView);
-            document.getElementById('wishlist-btn').addEventListener('click', showWishlistView);
-            document.getElementById('close-order-placed-modal-btn').addEventListener('click', () => orderPlacedModal.classList.add('hidden'));
-
-            document.getElementById('logo-container').addEventListener('click', () => {
-                logoClickCount++;
-                if (logoClickCount === 7) adminLoginModal.classList.remove('hidden');
-                setTimeout(() => { logoClickCount = 0; }, 2000); 
-            });
-            document.getElementById('admin-login-form').addEventListener('submit', handleAdminLogin);
-            document.getElementById('admin-logout-btn').addEventListener('click', handleAdminLogout);
-            
-            document.getElementById('admin-nav-orders').addEventListener('click', () => switchAdminTab('orders'));
-            document.getElementById('admin-nav-dashboard').addEventListener('click', () => switchAdminTab('dashboard'));
-            document.getElementById('admin-nav-products').addEventListener('click', () => switchAdminTab('products'));
-            document.getElementById('admin-nav-settings').addEventListener('click', () => switchAdminTab('settings'));
-
-            document.getElementById('close-product-detail-btn').addEventListener('click', () => productDetailModal.classList.add('hidden'));
-            document.getElementById('close-product-form-btn').addEventListener('click', () => productFormModal.classList.add('hidden'));
-            document.getElementById('add-new-product-btn').addEventListener('click', () => showProductForm());
-            document.getElementById('product-form').addEventListener('submit', handleSaveProduct);
-            document.getElementById('save-settings-btn').addEventListener('click', handleSaveSettings);
-
-            initVoiceBot();
-        }
-        
-        function showHomepageView() {
-            if (adminLoggedIn) return;
-            plpView.classList.add('hidden');
-            myOrdersView.classList.add('hidden');
-            wishlistView.classList.add('hidden');
-            homepageView.classList.remove('hidden');
-            mainContent.classList.remove('hidden');
-            adminDashboardView.classList.add('hidden');
-            currentFilters = { searchTerm: '', category: null, subCategories: [], sortBy: 'relevance' };
-            document.getElementById('search-bar').value = '';
-            window.scrollTo(0, 0);
-            lazyLoadImages();
-        }
-
-        function showPlpView(title = 'Products') {
-            if (adminLoggedIn) return;
-            homepageView.classList.add('hidden');
-            myOrdersView.classList.add('hidden');
-            wishlistView.classList.add('hidden');
-            plpView.classList.remove('hidden');
-            mainContent.classList.remove('hidden');
-            adminDashboardView.classList.add('hidden');
-            document.getElementById('plp-title').textContent = title;
-            window.scrollTo(0, 0);
-        }
-        
-        function showMyOrdersView() {
-             if (adminLoggedIn) return;
-            homepageView.classList.add('hidden');
-            plpView.classList.add('hidden');
-            wishlistView.classList.add('hidden');
-            myOrdersView.classList.remove('hidden');
-            mainContent.classList.remove('hidden');
-            adminDashboardView.classList.add('hidden');
-            renderMyOrders();
-        }
-
-        function showWishlistView() {
-            if(adminLoggedIn) return;
-            homepageView.classList.add('hidden');
-            plpView.classList.add('hidden');
-            myOrdersView.classList.add('hidden');
-            wishlistView.classList.remove('hidden');
-            mainContent.classList.remove('hidden');
-            adminDashboardView.classList.add('hidden');
-            renderWishlist();
-        }
-        
-        function showAdminDashboard() {
-            adminLoggedIn = true;
-            mainContent.classList.add('hidden');
-            adminDashboardView.classList.remove('hidden');
-            adminLoginModal.classList.add('hidden');
-            switchAdminTab('orders');
-        }
-
-        function handleAdminLogin(e) {
-            e.preventDefault();
-            const user = document.getElementById('admin-username').value;
-            const pass = document.getElementById('admin-password').value;
-            const errorEl = document.getElementById('admin-login-error');
-            if (user === 'hardik' && pass === '0000') {
-                errorEl.textContent = '';
-                showAdminDashboard();
-            } else {
-                errorEl.textContent = 'Invalid username or password.';
-            }
-        }
-
-        function handleAdminLogout() {
-            adminLoggedIn = false;
-            showHomepageView();
-        }
-
-        function switchAdminTab(tabName) {
-            const panels = ['orders', 'dashboard', 'products', 'settings'];
-            panels.forEach(p => {
-                const panelEl = document.getElementById(`admin-${p}-panel`);
-                const navEl = document.getElementById(`admin-nav-${p}`);
-                if (panelEl) panelEl.classList.add('hidden');
-                if (navEl) navEl.classList.remove('active');
-            });
-            
-            const activePanel = document.getElementById(`admin-${tabName}-panel`);
-            const activeNav = document.getElementById(`admin-nav-${tabName}`);
-            if(activePanel) activePanel.classList.remove('hidden');
-            if(activeNav) activeNav.classList.add('active');
-
-            if (tabName === 'orders') renderAdminDashboard();
-            if (tabName === 'dashboard') renderSalesDashboard();
-            if (tabName === 'products') renderProductManagement();
-            if (tabName === 'settings') renderSettings();
-        }
-        
-        function renderCategories() {
-            const container = document.getElementById('category-container');
-            if (!container || products.length === 0) return;
-            const categories = [...new Set(products.map(p => p.category))];
-            container.innerHTML = categories.map(cat => `
-                <button data-category="${cat}" class="category-btn flex flex-col items-center justify-center p-2 bg-white rounded-lg shadow-md aspect-square">
-                    <img class="h-1/2 w-1/2 object-contain mb-2" src="https://placehold.co/100x100/f0f0f0/3b82f6?text=${cat.substring(0,1)}" alt="${cat}">
-                    <span class="text-xs sm:text-sm font-semibold text-center">${cat}</span>
+                <button id="cart-button" class="relative">
+                    <i data-lucide="shopping-bag"></i>
+                    <span id="cart-count" class="absolute -top-2 -right-2 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">0</span>
                 </button>
-            `).join('');
-            document.querySelectorAll('.category-btn').forEach(btn => btn.addEventListener('click', () => {
-                currentFilters.category = btn.dataset.category;
-                currentFilters.subCategories = [];
-                applyFiltersAndRender();
-            }));
-        }
+            </header>
 
-        function renderSpecials() {
-            const container = document.getElementById('specials-container');
-            if (!container || products.length === 0) return;
-            const specials = products.filter(p => ["SVGS-1002", "SVGS-1011", "SVGS-1015", "SVGS-1009"].includes(p.productID));
-            container.innerHTML = specials.map(product => createProductCard(product, true)).join('');
-            addCardEventListeners();
-        }
-
-        function renderDealOfTheDay() {
-            const container = document.getElementById('deal-of-the-day-section');
-            if (!container || products.length === 0) return;
-            const dealProduct = products.find(p => p.productID === 'SVGS-1010'); // Maggi as default deal
-            if (!dealProduct) return;
-
-            container.innerHTML = `
-                <h3 class="text-3xl font-bold mb-6 text-center section-header">Deal of the Day</h3>
-                <div class="bg-white rounded-xl shadow-lg p-6 flex flex-col md:flex-row items-center gap-8">
-                    <img data-src-query="${dealProduct.googleImageQuery}" src="https://placehold.co/300x300/f0f0f0/cccccc?text=Loading..." alt="${dealProduct.productName}" class="lazy-image w-48 h-48 object-cover rounded-lg">
-                    <div class="flex-1 text-center md:text-left">
-                        <span class="text-sm font-bold uppercase text-brand-blue">Limited Time Offer</span>
-                        <h4 class="text-3xl font-bold my-2">${dealProduct.productName}</h4>
-                        <p class="text-slate-500 mb-4">${dealProduct.description}</p>
-                        <div class="flex items-center justify-center md:justify-start gap-4">
-                             <p class="text-4xl font-bold text-brand-green">₹${dealProduct.price_INR}</p>
-                             <button data-product-id="${dealProduct.productID}" class="add-btn bg-brand-blue text-white font-bold px-8 py-3 rounded-lg text-lg hover:bg-blue-600 transition">Add to Cart</button>
-                        </div>
+            <div class="overflow-y-auto pb-24">
+                <!-- Search Bar -->
+                <div class="p-4">
+                    <div class="relative">
+                        <input type="text" id="search-input" placeholder="Search products..." class="w-full bg-gray-100 rounded-full py-3 px-5 pl-12 border-2 border-transparent focus:outline-none focus:border-green-400 transition">
+                        <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
                     </div>
                 </div>
-            `;
-            addCardEventListeners();
-        }
 
-        function renderAiRecommendations() {
-            const container = document.getElementById('ai-recommendations-container');
-            const section = document.getElementById('ai-recommendations-section');
-            const cartIds = Object.keys(cart);
-            if (cartIds.length === 0) {
-                section.classList.add('hidden');
-                return;
-            }
-            const recommendations = new Set();
-            const recommendationMap = { "SVGS-1002": ["SVGS-1009", "SVGS-1011"], "SVGS-1010": ["SVGS-1003"], "SVGS-1004": ["SVGS-1015"] };
-            cartIds.forEach(id => {
-                if(recommendationMap[id]) {
-                    recommendationMap[id].forEach(recId => recommendations.add(recId));
-                }
-            });
-            const recProducts = [...recommendations].map(id => products.find(p => p.productID === id)).filter(p => p && !cart[p.productID]);
-            if (recProducts.length > 0) {
-                container.innerHTML = recProducts.map(product => createProductCard(product, true)).join('');
-                addCardEventListeners();
-                section.classList.remove('hidden');
-            } else {
-                section.classList.add('hidden');
-            }
-        }
+                <!-- Slideshow -->
+                <div id="slideshow-container" class="px-4 mb-6 relative"></div>
 
-        function createProductCard(product, isSpecial = false) {
-            const inCart = cart[product.productID] > 0;
-            const quantity = cart[product.productID] || 0;
-            const isOutOfStock = product.stockStatus === 'Out of Stock';
-            const inWishlist = wishlist.includes(product.productID);
-
-            return `
-                <div class="product-card bg-white rounded-lg shadow-md overflow-hidden flex flex-col ${isSpecial ? 'flex-shrink-0 w-64' : ''}" data-product-id="${product.productID}">
-                    <div class="relative pt-[100%] bg-slate-100 cursor-pointer product-image-container">
-                        <img data-src-query="${product.googleImageQuery}" src="https://placehold.co/300x300/f0f0f0/cccccc?text=Loading..." alt="${product.productName}" class="lazy-image absolute top-0 left-0 w-full h-full object-cover">
-                        <button class="wishlist-heart-btn absolute top-2 right-2 p-1.5 bg-white/70 rounded-full" data-product-id="${product.productID}">
-                           <svg class="w-6 h-6 ${inWishlist ? 'text-red-500 fill-current' : 'text-slate-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"></path></svg>
-                        </button>
-                        ${isOutOfStock ? `<div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white font-bold">OUT OF STOCK</div>` : ''}
+                <!-- Categories -->
+                <section class="px-4 mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="font-bold text-lg">Top Categories</h2>
                     </div>
-                    <div class="p-4 flex-grow flex flex-col">
-                        <h4 class="font-semibold text-md flex-grow">${product.productName}</h4>
-                        <div class="flex justify-between items-center my-2">
-                             <p class="font-bold text-lg">₹${product.price_INR}</p>
-                             <button class="share-btn p-1" data-product-name="${product.productName}" data-price="${product.price_INR}">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 hover:text-brand-green" viewBox="0 0 20 20" fill="currentColor"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" /></svg>
-                             </button>
-                        </div>
-                        <div class="mt-auto">
-                            ${isOutOfStock ? 
-                                '<button disabled class="w-full text-center py-2 bg-slate-300 text-slate-500 font-semibold rounded-lg cursor-not-allowed">Add</button>' :
-                                (inCart ? `
-                                <div class="flex items-center justify-between bg-slate-100 rounded-lg">
-                                    <button class="quantity-btn decrease-btn text-brand-blue font-bold py-2 px-4 rounded-lg">-</button>
-                                    <span class="font-bold">${quantity}</span>
-                                    <button class="quantity-btn increase-btn text-brand-blue font-bold py-2 px-4 rounded-lg">+</button>
-                                </div>` : 
-                                '<button class="add-btn w-full text-center py-2 bg-brand-blue text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors">Add</button>'
-                            )}
-                        </div>
+                    <div id="categories-grid" class="flex gap-4 overflow-x-auto pb-2"></div>
+                </section>
+
+                <!-- Products -->
+                <section class="px-4 mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 id="product-section-title" class="font-bold text-lg">Exclusive Offer</h2>
                     </div>
-                </div>`;
-        }
-        
-        function renderProducts(productsToRender) {
-            const container = document.getElementById('plp-product-grid');
-            if(!container) return;
-            if (productsToRender.length === 0) {
-                 container.innerHTML = '<p class="col-span-full text-center text-slate-500">No products found.</p>';
-            } else {
-                container.innerHTML = productsToRender.map(p => createProductCard(p)).join('');
-            }
-            addCardEventListeners();
-            lazyLoadImages();
-        }
-
-        function addCardEventListeners() {
-            document.querySelectorAll('.product-card, #deal-of-the-day-section').forEach(addCardEventListenersForSingleCard);
-        }
-        
-        async function updateCart(productId, quantity) {
-            const newCart = { ...cart };
-            if (quantity <= 0) {
-                delete newCart[productId];
-            } else {
-                newCart[productId] = quantity;
-            }
-            await setDoc(userDataRef, { cart: newCart }, { merge: true });
-            
-            // Note: The UI updates automatically via the onSnapshot listener
-        }
-
-        function addCardEventListenersForSingleCard(card) {
-             const productId = card.dataset.productId;
-             if(!productId) return;
-             const update = (newQuantity) => updateCart(productId, newQuantity);
-             card.querySelector('.add-btn')?.addEventListener('click', (e) => { e.stopPropagation(); update(1); });
-             card.querySelector('.increase-btn')?.addEventListener('click', (e) => { e.stopPropagation(); update((cart[productId] || 0) + 1); });
-             card.querySelector('.decrease-btn')?.addEventListener('click', (e) => { e.stopPropagation(); update((cart[productId] || 0) - 1); });
-             card.querySelector('.share-btn')?.addEventListener('click', (e) => {
-                 e.stopPropagation();
-                 const name = e.currentTarget.dataset.productName;
-                 const price = e.currentTarget.dataset.price;
-                 const shareText = `Check out this deal from Sarita Vijay Express: ${name} for just ₹${price}!`;
-                 const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-                 window.open(whatsappUrl, '_blank');
-             });
-             card.querySelector('.wishlist-heart-btn')?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleWishlist(productId);
-             });
-             card.querySelector('.product-image-container')?.addEventListener('click', () => showProductDetail(productId));
-        }
-        
-        function updateCartBadge() {
-            const count = Object.values(cart).reduce((s, q) => s + q, 0);
-            document.getElementById('cart-badge').textContent = count;
-        }
-
-        function renderSubCategoryFilters(filteredProducts) {
-            const container = document.getElementById('subcategory-filter-container');
-            const subCategories = [...new Set(filteredProducts.map(p => p.subCategory))].sort();
-            container.innerHTML = subCategories.map(subCat => `
-                <div class="flex items-center">
-                    <input id="subcat-${subCat.replace(/\s+/g, '-')}" data-subcategory="${subCat}" type="checkbox" ${currentFilters.subCategories.includes(subCat) ? 'checked' : ''} class="subcategory-checkbox h-4 w-4 text-brand-blue border-slate-300 rounded focus:ring-brand-blue">
-                    <label for="subcat-${subCat.replace(/\s+/g, '-')}" class="ml-2 block text-sm text-slate-900">${subCat}</label>
-                </div>`).join('');
-            document.querySelectorAll('.subcategory-checkbox').forEach(c => c.addEventListener('change', (e) => {
-                const subCat = e.target.dataset.subcategory;
-                if (e.target.checked) currentFilters.subCategories.push(subCat);
-                else currentFilters.subCategories = currentFilters.subCategories.filter(sc => sc !== subCat);
-                applyFiltersAndRender();
-            }));
-        }
-
-        function applyFiltersAndRender() {
-            if (products.length === 0) return;
-            
-            let filtered = [...products];
-            
-            if (currentFilters.searchTerm) {
-                const term = currentFilters.searchTerm.toLowerCase();
-                filtered = filtered.filter(p => p.productName.toLowerCase().includes(term));
-                showPlpView(`Search: "${currentFilters.searchTerm}"`);
-            } else if (currentFilters.category) {
-                filtered = filtered.filter(p => p.category === currentFilters.category);
-                showPlpView(currentFilters.category);
-            } else {
-                showHomepageView();
-                return;
-            }
-
-            renderSubCategoryFilters(filtered.filter(p => p.category === currentFilters.category || !currentFilters.category));
-            if (currentFilters.subCategories.length > 0) filtered = filtered.filter(p => currentFilters.subCategories.includes(p.subCategory));
-            if (currentFilters.sortBy === 'price-asc') filtered.sort((a, b) => a.price_INR - b.price_INR);
-            else if (currentFilters.sortBy === 'price-desc') filtered.sort((a, b) => b.price_INR - a.price_INR);
-            renderProducts(filtered);
-        }
-
-        function toggleCartModal() {
-            const cartModal = document.getElementById('cart-modal');
-            const cartBackdrop = document.getElementById('cart-backdrop');
-            const cartContent = document.getElementById('cart-content');
-            const isHidden = cartModal.classList.contains('hidden');
-            if (isHidden) {
-                renderCart();
-                cartModal.classList.remove('hidden');
-                setTimeout(() => { cartBackdrop.classList.remove('opacity-0'); cartContent.classList.remove('scale-95'); }, 10);
-            } else {
-                cartBackdrop.classList.add('opacity-0'); cartContent.classList.add('scale-95');
-                setTimeout(() => cartModal.classList.add('hidden'), 300);
-            }
-        }
-
-        function renderCart() {
-            const itemsContainer = document.getElementById('cart-items-container');
-            const summaryContainer = document.getElementById('cart-summary');
-            const cartItems = Object.keys(cart);
-
-            if (cartItems.length === 0) {
-                itemsContainer.innerHTML = '<p class="text-center text-slate-500">Your cart is empty.</p>';
-                summaryContainer.innerHTML = '';
-                return;
-            }
-
-            itemsContainer.innerHTML = cartItems.map(id => {
-                const product = products.find(p => p.productID === id);
-                if (!product) return '';
-                const quantity = cart[id];
-                return `<div class="flex items-center justify-between py-2 border-b"><div><p class="font-semibold">${product.productName}</p><p class="text-sm text-slate-500">₹${product.price_INR} x ${quantity}</p></div><p class="font-bold">₹${product.price_INR * quantity}</p></div>`;
-            }).join('');
-            
-            const subtotal = cartItems.reduce((sum, id) => {
-                const product = products.find(p => p.productID === id);
-                return sum + (product ? product.price_INR * cart[id] : 0);
-            }, 0);
-            
-            let cashback = subtotal > 2000 ? subtotal * 0.02 : (subtotal > 1000 ? subtotal * 0.01 : 0);
-            const deliveryCharge = Number(storeSettings.deliveryCharge) || 0;
-            const total = subtotal - cashback + deliveryCharge;
-
-            summaryContainer.innerHTML = `<div class="space-y-2">
-                <div class="flex justify-between"><span class="text-slate-600">Subtotal</span><span class="font-semibold">₹${subtotal.toFixed(2)}</span></div>
-                ${cashback > 0 ? `<div class="flex justify-between text-green-600"><span class="text-green-600">Cashback Discount</span><span class="font-semibold">- ₹${cashback.toFixed(2)}</span></div>` : ''}
-                ${deliveryCharge > 0 ? `<div class="flex justify-between"><span class="text-slate-600">Delivery Charge</span><span class="font-semibold">₹${deliveryCharge.toFixed(2)}</span></div>` : ''}
-                <div class="flex justify-between text-lg font-bold border-t pt-2 mt-2"><span >Total</span><span>₹${total.toFixed(2)}</span></div>
-            </div><button id="place-order-btn" class="w-full mt-4 bg-slate-800 text-white py-3 rounded-lg font-bold hover:bg-slate-700 transition">Place Order</button>`;
-            document.getElementById('place-order-btn').addEventListener('click', placeOrder);
-        }
-
-        async function placeOrder() {
-            const orderId = `SVE-${Date.now()}`;
-            let subtotal = 0;
-            Object.keys(cart).forEach(id => {
-                const p = products.find(p => p.productID === id);
-                if(p) subtotal += p.price_INR * cart[id];
-            });
-
-            let cashback = subtotal > 2000 ? subtotal * 0.02 : (subtotal > 1000 ? subtotal * 0.01 : 0);
-            const deliveryCharge = Number(storeSettings.deliveryCharge) || 0;
-            const total = subtotal - cashback + deliveryCharge;
-
-            const newOrder = { 
-                id: orderId, 
-                items: cart, 
-                total: total, 
-                timestamp: new Date().toISOString(), 
-                status: 'pending',
-                userId: userId // Track which user placed the order
-            };
-            
-            const orderRef = doc(ordersRef, orderId);
-            await setDoc(orderRef, newOrder);
-
-            // Clear the user's cart
-            await updateCart(null, -1); // Special command to clear cart
-            
-            try { newOrderSound.play().catch(e => console.error("Audio play failed initially", e)); } catch(e) { console.error("Audio play failed", e); }
-
-            toggleCartModal();
-            orderPlacedModal.classList.remove('hidden');
-        }
-
-        function getStatusChip(status) {
-            switch(status) {
-                case 'pending': return `<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-orange-600 bg-orange-200">Pending Confirmation</span>`;
-                case 'preparing': return `<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-yellow-600 bg-yellow-200">Preparing</span>`;
-                case 'completed': return `<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-green-600 bg-green-200">Completed</span>`;
-                default: return '';
-            }
-        }
-        
-        function renderMyOrders() {
-            const container = document.getElementById('orders-list-container');
-            // Filter orders for the current user
-            const userOrders = orders.filter(o => o.userId === userId).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-            if(userOrders.length === 0) {
-                container.innerHTML = `<p class="text-center text-slate-500">You haven't placed any orders yet.</p>`;
-                return;
-            }
-
-            container.innerHTML = userOrders.map(order => {
-                const orderTime = new Date(order.timestamp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'});
-                let itemsHtml = Object.keys(order.items).map(id => { const p = products.find(p => p.productID === id); return `<li class="text-sm text-slate-600">${p ? p.productName : 'Unknown Product'} x ${order.items[id]}</li>`; }).join('');
-
-                return `
-                    <div class="bg-white p-4 rounded-lg shadow">
-                        <div class="flex justify-between items-center mb-2">
-                            <p class="font-bold text-sm">${order.id}</p>
-                            ${getStatusChip(order.status)}
-                        </div>
-                         <p class="text-xs text-slate-500 mb-2">${orderTime}</p>
-                         <ul class="list-disc list-inside mb-2 pl-2">${itemsHtml}</ul>
-                         <p class="font-bold text-right text-lg">Total: ₹${order.total.toFixed(2)}</p>
+                    <div id="product-grid" class="grid grid-cols-2 gap-4"></div>
+                    <div id="no-products-message" class="hidden text-center py-12 text-gray-500">
+                        <i data-lucide="search-x" class="mx-auto h-12 w-12"></i>
+                        <h3 class="mt-2 text-lg font-medium">No Products Found</h3>
                     </div>
-                `
-            }).join('');
-        }
+                </section>
+            </div>
+        </div>
 
-        function renderAdminDashboard() {
-            const columns = { pending: document.getElementById('pending-orders-column'), preparing: document.getElementById('preparing-orders-column'), completed: document.getElementById('completed-orders-column') };
-            Object.values(columns).forEach(c => c.innerHTML = '');
-            const sortedOrders = [...orders].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-            if (sortedOrders.length === 0) { columns.pending.innerHTML = '<p class="text-sm text-center text-slate-500">No orders yet.</p>'; return; }
+        <!-- Product Detail Page -->
+        <div id="page-detail" class="page page-detail">
+            <!-- Content will be injected by JS -->
+        </div>
+        
+        <!-- Floating Contact Button -->
+        <button id="contact-fab" class="fixed bottom-6 right-6 bg-green-500 hover:bg-green-600 text-white rounded-full p-4 shadow-lg z-50 flex items-center gap-2 transform hover:scale-110 transition-transform">
+            <i data-lucide="phone"></i>
+        </button>
+    </div>
+    
+    <!-- Modals -->
+    <div id="modals-container">
+        <div id="checkout-modal-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100]"></div>
+        <div id="order-history-lookup-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-[100] flex items-center justify-center p-4"></div>
+        <div id="order-history-display-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-[100] flex items-center justify-center p-4"></div>
+        <div id="contact-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-[100] flex items-center justify-center p-4"></div>
+    </div>
 
-            sortedOrders.forEach(order => {
-                const card = document.createElement('div');
-                card.className = 'bg-white p-3 rounded-md shadow';
-                const orderTime = new Date(order.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit'});
-                let itemsHtml = Object.keys(order.items).map(id => { const p = products.find(p => p.productID === id); return `<li class="text-xs text-slate-600">${p ? p.productName : 'Unknown Product'} x ${order.items[id]}</li>`; }).join('');
-                card.innerHTML = `<p class="font-bold text-sm">${order.id}</p><p class="text-xs text-slate-500 mb-2">${orderTime}</p><ul class="list-disc list-inside mb-2">${itemsHtml}</ul><p class="font-bold text-right mb-3">Total: ₹${order.total.toFixed(2)}</p><div class="flex gap-2">${order.status === 'pending' ? `<button data-order-id="${order.id}" class="admin-action-btn w-full bg-green-500 text-white text-sm py-1 rounded hover:bg-green-600" data-action="accept">Accept</button>` : ''}${order.status === 'preparing' ? `<button data-order-id="${order.id}" class="admin-action-btn w-full bg-blue-500 text-white text-sm py-1 rounded hover:bg-blue-600" data-action="complete">Complete</button>` : ''}</div>`;
-                if(columns[order.status]) {
-                    columns[order.status].appendChild(card);
-                }
-            });
-            document.querySelectorAll('.admin-action-btn').forEach(btn => btn.addEventListener('click', handleAdminAction));
-        }
+    <script>
+        const SUPABASE_URL = 'https://dpyzcwzvyuuvtefyqnqu.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRweXpjd3p2eXV1dnRlZnlxbnF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg4MDc1NjksImV4cCI6MjA3NDM4MzU2OX0.WMtixHcEcmzVERmZVe71geAts3PVrIKKG3r7MEZhzRE';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const LOCATIONIQ_API_KEY = 'pk.8405f9d2a07fcdd7537b13a3e342c199'; 
 
-        async function handleAdminAction(e) {
-            const orderId = e.target.dataset.orderId;
-            const action = e.target.dataset.action;
-            const orderRef = doc(ordersRef, orderId);
-            let newStatus = '';
-            if (action === 'accept') newStatus = 'preparing';
-            else if (action === 'complete') newStatus = 'completed';
-            
-            if(newStatus) {
-                await updateDoc(orderRef, { status: newStatus });
-            }
-        }
+        const app = {
+            state: { cart: [], checkout: {}, currentCategory: 'all', searchQuery: '', currentSlide: 0, slideTimeout: null },
+            db: {},
+            methods: {
+                async init() {
+                    this.loadCart();
+                    this.setupEventListeners();
+                    await this.loadInitialData();
+                    this.renderAll();
+                    document.getElementById('global-loader').classList.add('hidden');
+                },
+                async loadInitialData() {
+                    const [settingsRes, slideshowRes, productsRes, categoriesRes] = await Promise.all([
+                        supabaseClient.from('settings').select('*').limit(1).single(),
+                        supabaseClient.from('slideshow').select('*').eq('status', 'Active'),
+                        supabaseClient.from('products').select('*, variants(*)').eq('status', 'Active'),
+                        supabaseClient.from('categories').select('*'),
+                    ]);
+                    app.db = {
+                        settings: settingsRes.data || { store_name: 'Grocery Store' },
+                        slideshow: slideshowRes.data || [],
+                        products: productsRes.data || [],
+                        categories: categoriesRes.data || []
+                    };
+                    document.getElementById('header-store-name').textContent = app.db.settings.store_name;
+                },
+                renderAll() {
+                    this.renderSlideshow();
+                    this.renderCategories();
+                    this.renderProducts('Exclusive Offer');
+                    this.updateCartCount();
+                },
+                renderSlideshow() {
+                    const container = document.getElementById('slideshow-container');
+                    if (!container || app.db.slideshow.length === 0) return;
+                    
+                    const slidesHTML = app.db.slideshow.map(slide => `<div class="slide aspect-[2/1] rounded-2xl overflow-hidden"><img src="${slide.img_url}" class="w-full h-full object-cover"></div>`).join('');
+                    const arrowsHTML = `
+                        <button onclick="app.methods.plusSlides(-1)" class="absolute top-1/2 left-2 -translate-y-1/2 bg-white/70 p-2 rounded-full shadow-md hover:bg-white transition"><i data-lucide="chevron-left"></i></button>
+                        <button onclick="app.methods.plusSlides(1)" class="absolute top-1/2 right-2 -translate-y-1/2 bg-white/70 p-2 rounded-full shadow-md hover:bg-white transition"><i data-lucide="chevron-right"></i></button>
+                    `;
+                    container.innerHTML = slidesHTML + arrowsHTML;
+                    this.showSlide(0);
+                    lucide.createIcons();
+                },
+                plusSlides(n) { this.showSlide(app.state.currentSlide + n); },
+                showSlide(index) {
+                    clearTimeout(app.state.slideTimeout);
+                    const slides = document.querySelectorAll('#slideshow-container .slide');
+                    if (!slides.length) return;
+                    app.state.currentSlide = (index + slides.length) % slides.length;
+                    slides.forEach((slide, i) => slide.style.display = i === app.state.currentSlide ? 'block' : 'none');
+                    app.state.slideTimeout = setTimeout(() => this.showSlide(app.state.currentSlide + 1), 4000);
+                },
+                renderCategories() {
+                    const grid = document.getElementById('categories-grid');
+                    if (!grid) return;
+                    let categoriesHtml = `<div onclick="app.methods.filterByCategory('all', 'All Products')" class="text-center space-y-2 flex-shrink-0"><div class="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center category-icon"><i data-lucide="list" class="text-green-600"></i></div><p class="text-sm font-semibold">All</p></div>`;
+                    categoriesHtml += app.db.categories.map(cat => `
+                        <div onclick="app.methods.filterByCategory(${cat.id}, '${cat.name}')" class="text-center space-y-2 flex-shrink-0">
+                            <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center p-2 category-icon"><img src="${cat.img_url}" alt="${cat.name}" class="max-w-full max-h-full object-contain"></div>
+                            <p class="text-sm font-semibold">${cat.name}</p>
+                        </div>
+                    `).join('');
+                    grid.innerHTML = categoriesHtml;
+                    lucide.createIcons();
+                },
+                filterByCategory(categoryId, categoryName = 'Products') {
+                    app.state.currentCategory = categoryId;
+                    this.renderProducts(categoryName);
+                },
+                renderProducts(title) {
+                    document.getElementById('product-section-title').textContent = title;
+                    const grid = document.getElementById('product-grid');
+                    const noProductsMsg = document.getElementById('no-products-message');
+                    grid.innerHTML = '';
+                    let productsToRender = app.db.products;
 
-        function renderSalesDashboard() {
-            const completedOrders = orders.filter(o => o.status === 'completed');
-            const totalRevenue = completedOrders.reduce((sum, order) => sum + order.total, 0);
-            const totalOrders = completedOrders.length;
-            const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+                    if (app.state.currentCategory !== 'all') {
+                        productsToRender = app.db.products.filter(p => p.category_id === app.state.currentCategory);
+                    }
 
-            document.getElementById('stats-total-revenue').textContent = `₹${totalRevenue.toFixed(2)}`;
-            document.getElementById('stats-total-orders').textContent = totalOrders;
-            document.getElementById('stats-avg-order-value').textContent = `₹${avgOrderValue.toFixed(2)}`;
+                    if (app.state.searchQuery) {
+                        productsToRender = productsToRender.filter(p => p.name.toLowerCase().includes(app.state.searchQuery.toLowerCase()));
+                    }
+                    
+                    noProductsMsg.classList.toggle('hidden', productsToRender.length > 0);
+                    grid.classList.toggle('hidden', productsToRender.length === 0);
 
-            const itemCounts = {};
-            completedOrders.forEach(order => {
-                Object.entries(order.items).forEach(([productId, quantity]) => {
-                    itemCounts[productId] = (itemCounts[productId] || 0) + quantity;
-                });
-            });
-
-            const bestSellers = Object.entries(itemCounts)
-                .sort(([, a], [, b]) => b - a)
-                .slice(0, 3)
-                .map(([productId, count]) => {
-                    const product = products.find(p => p.productID === productId);
-                    return { name: product ? product.productName : 'Unknown', count };
-                });
-
-            const bestSellersContainer = document.getElementById('stats-best-sellers');
-            if (bestSellers.length > 0) {
-                bestSellersContainer.innerHTML = bestSellers.map(item => `<li class="flex justify-between"><span>${item.name}</span><span class="font-bold">${item.count} sold</span></li>`).join('');
-            } else {
-                bestSellersContainer.innerHTML = `<p class="text-slate-500">No sales data yet.</p>`;
-            }
-            
-            const aiTipsContainer = document.getElementById('stats-ai-tips');
-            let tipsHtml = `<li><span class="font-bold text-brand-blue">General Tip:</span> Use the "Share" button on products to promote them on WhatsApp and other social media.</li>`;
-            if (bestSellers.length > 0) {
-                const topProduct = bestSellers[0].name;
-                tipsHtml += `<li><span class="font-bold text-brand-green">Data-Driven Tip:</span> Your customers love ${topProduct}! Consider creating a special "bundle deal" with it to increase average order value.</li>`;
-            }
-             if (avgOrderValue > 0 && avgOrderValue < 250) {
-                tipsHtml += `<li><span class="font-bold text-brand-blue">Growth Tip:</span> Your average order value is ₹${avgOrderValue.toFixed(2)}. Encourage larger carts by offering a small, free item on orders above ₹500.</li>`;
-            }
-            aiTipsContainer.innerHTML = tipsHtml;
-        }
-
-       async function getAIResponse(command) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
-
-            const systemPrompt = `You are "Sarita," a friendly and efficient AI shopping assistant for an online Indian grocery store called Sarita Vijay Express. Your goal is to help users manage their shopping cart and get information using natural language, primarily in Hindi (written in Latin script, i.e., Hinglish).
-
-            Analyze the user's text and convert it into a structured JSON array of actions. 
-            The available actions are: "add_item", "search", "checkout", "greet", "unknown", "query_price", "query_availability".
-
-            For "add_item", identify product name and quantity. Find the closest match from the provided product list.
-            For "search", identify the search query.
-            For "query_price", identify the product name.
-            For "query_availability", list all available products or products from a specific category if mentioned.
-            
-            Always include a friendly, conversational "response" in your JSON output that confirms the action or answers the question. Your response MUST be in Hinglish. Do not make up products. If a product is not in the list, say you couldn't find it.
-
-            Here is the list of available products with prices:
-            ${products.map(p => `"${p.productName}": ${p.price_INR}`).join(',\n')}
-
-            Example user command: "Namaste, do maggi aur ek tata namak add kardo"
-            Example JSON output:
-            {
-                "actions": [
-                    { "action": "add_item", "item": "Maggi 2-Minute Noodles Masala", "quantity": 2 },
-                    { "action": "add_item", "item": "Tata Salt", "quantity": 1 }
-                ],
-                "response": "Theek hai, maine 2 Maggi aur 1 Tata Salt aapke cart mein daal diya hai. Aur kuch?"
-            }
-
-            Example user command: "atta ka price kya hai"
-            Example JSON output:
-            {
-                "actions": [ { "action": "query_price", "item": "Aashirvaad Shudh Chakki Atta" } ],
-                "response": "Aashirvaad Shudh Chakki Atta ka price ₹410 hai."
-            }
-            
-            Example user command: "kya kya samaan hai"
-            Example JSON output:
-            {
-                "actions": [ { "action": "query_availability" } ],
-                "response": "Hamare paas Atta, Namak, Doodh, aur bhi bahut kuch hai! Aapko kuch specific chahiye?"
-            }
-            `;
-            
-            const payload = {
-                contents: [{ parts: [{ text: command }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: { responseMimeType: "application/json" }
-            };
-
-            try {
-                const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) throw new Error(`API Error: ${response.status}`);
-                const result = await response.json();
-                const jsonText = result.candidates[0].content.parts[0].text;
-                return JSON.parse(jsonText);
-            } catch (error) {
-                console.error("Gemini API call failed:", error);
-                return { actions: [{ action: 'unknown' }], response: "Maaf kijiye, abhi thodi dikkat aa rahi hai. Kripya thodi der baad try karein." };
-            }
-        }
-
-
-        function initVoiceBot() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            const aiStatus = document.getElementById('ai-status');
-            const voiceBtn = document.getElementById('voice-control-btn');
-
-            if (!SpeechRecognition) {
-                document.getElementById('ai-bot-ui').style.display = 'none';
-                return;
-            }
-
-            const recognition = new SpeechRecognition();
-            recognition.continuous = false; recognition.lang = 'hi-IN'; recognition.interimResults = false; recognition.maxAlternatives = 1;
-            
-            const showStatus = (text) => { aiStatus.textContent = text; aiStatus.classList.remove('hidden'); };
-            const hideStatus = () => aiStatus.classList.add('hidden');
-            const speak = (text) => {
-                showStatus(text);
-                try {
-                    const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.lang = 'hi-IN';
-                    speechSynthesis.speak(utterance);
-                    utterance.onend = () => setTimeout(hideStatus, 2000);
-                } catch(e) {
-                    console.error("Speech synthesis failed", e);
-                    setTimeout(hideStatus, 2000);
-                }
-            };
-
-            voiceBtn.addEventListener('click', () => { 
-                try {
-                    speak("Namaste, main Sarita General Store se Sarita. Aapka order batayein, main list bana lungi.");
-                    setTimeout(() => recognition.start(), 2500); // Give intro time to finish
-                } catch(e) {
-                    speak("Voice recognition error. Please check browser permissions.");
-                }
-            });
-
-            recognition.onstart = () => { voiceBtn.classList.add('listening'); showStatus('Sun rahi hoon...'); };
-            recognition.onresult = async (event) => {
-                const command = event.results[event.results.length - 1][0].transcript;
-                showStatus(`Aapne kaha: ${command}`);
-                const aiResponse = await getAIResponse(command);
-                
-                speak(aiResponse.response);
-
-                if (aiResponse.actions) {
-                    aiResponse.actions.forEach(task => {
-                        const product = products.find(p => p.productName === task.item);
-                        switch(task.action) {
-                            case 'add_item':
-                                if (product) {
-                                    updateCart(product.productID, (cart[product.productID] || 0) + task.quantity);
-                                }
-                                break;
-                            case 'search':
-                                document.getElementById('search-bar').value = task.query;
-                                currentFilters.searchTerm = task.query;
-                                applyFiltersAndRender();
-                                break;
-                            case 'checkout':
-                                if (Object.keys(cart).length > 0) { toggleCartModal(); } 
-                                break;
+                    productsToRender.forEach((p, index) => {
+                        const firstActiveVariant = p.variants?.find(v => v.status === 'Active');
+                        if (firstActiveVariant) grid.innerHTML += this.createProductCard(p, firstActiveVariant, index);
+                    });
+                    lucide.createIcons();
+                },
+                createProductCard(product, variant, index) {
+                    const salePrice = parseFloat(variant.sale_price).toFixed(2);
+                    const hasMultipleVariants = product.variants.filter(v => v.status === 'Active').length > 1;
+                    
+                    return `
+                        <div class="product-card bg-white p-4 rounded-2xl border border-gray-100 space-y-2" onclick="app.methods.showProductDetail(${product.id})">
+                            <img src="${product.img}" class="w-full h-24 object-contain mb-2">
+                            <h3 class="font-bold text-md truncate">${product.name}</h3>
+                            <p class="text-sm text-gray-500">${variant.unit}</p>
+                            <div class="flex justify-between items-center">
+                                <span class="font-extrabold text-lg">${app.db.settings.currency_symbol || '$'}${salePrice}</span>
+                                <div id="action-container-${variant.id}" onclick="event.stopPropagation();">${this.getActionButtonHTML(variant.id, hasMultipleVariants, product.id)}</div>
+                            </div>
+                        </div>`;
+                },
+                getActionButtonHTML(variantId, hasMultipleVariants, productId) {
+                    const itemInCart = app.state.cart.find(item => item.variantId === variantId);
+                    if (itemInCart && !hasMultipleVariants) {
+                        return `<div class="flex items-center justify-center bg-gray-100 font-bold rounded-full">
+                            <button onclick="app.methods.updateCartQuantity(${variantId}, -1)" class="p-2 add-to-cart-btn"><i data-lucide="minus" class="w-4 h-4"></i></button>
+                            <span class="text-md px-2">${itemInCart.quantity}</span>
+                            <button onclick="app.methods.updateCartQuantity(${variantId}, 1)" class="p-2 add-to-cart-btn"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                        </div>`;
+                    }
+                    const action = hasMultipleVariants ? `app.methods.showProductDetail(${productId})` : `app.methods.addToCart(${variantId})`;
+                    return `<button onclick="${action}" class="bg-green-500 text-white rounded-full p-2 hover:bg-green-600 add-to-cart-btn"><i data-lucide="plus"></i></button>`;
+                },
+                updateAllActionButtons(variantId) {
+                    document.querySelectorAll(`[id^="action-container-${variantId}"]`).forEach(container => {
+                        const product = this.getProductByVariantId(variantId);
+                        if(product) {
+                            const hasMultipleVariants = product.variants.filter(v => v.status === 'Active').length > 1;
+                            container.innerHTML = this.getActionButtonHTML(variantId, hasMultipleVariants, product.id);
+                            lucide.createIcons();
                         }
                     });
-                }
-            };
-            recognition.onerror = (event) => {
-                if(event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                    speak("Kripya microphone access allow karein.");
-                } else {
-                    speak("Maaf kijiye, main samjhi nahi.");
-                }
-            };
-            recognition.onend = () => { voiceBtn.classList.remove('listening'); setTimeout(hideStatus, 1000); };
-        }
-
-        async function fetchImageFromPixabay(query) {
-            if (!pixabayApiKey) return null;
-            const URL = `https://pixabay.com/api/?key=${pixabayApiKey}&q=${encodeURIComponent(query)}&image_type=photo&orientation=horizontal&safesearch=true&per_page=3`;
-            try {
-                const response = await fetch(URL);
-                if (!response.ok) throw new Error('Pixabay API request failed');
-                const data = await response.json();
-                return data.hits[0]?.webformatURL || null;
-            } catch (error) {
-                console.error("Pixabay API call failed:", error);
-                return null;
-            }
-        }
-
-        async function processImageQueue() {
-            if (isFetchingImage || imageRequestQueue.length === 0) return;
-            isFetchingImage = true;
-            const { img, query } = imageRequestQueue.shift();
-            const src = await fetchImageFromPixabay(query);
-            if (src) {
-                img.src = src;
-            } else {
-                img.src = `https://placehold.co/300x300/f8f8f8/343A40?text=Not+Found`;
-            }
-            isFetchingImage = false;
-            setTimeout(processImageQueue, 200); // Gentle delay to avoid hitting rate limits
-        }
-
-        function lazyLoadImages() {
-            const lazyImages = document.querySelectorAll('.lazy-image');
-            const imageObserver = new IntersectionObserver((entries, observer) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const img = entry.target;
-                        const query = img.dataset.srcQuery;
-                        imageRequestQueue.push({ img, query });
-                        processImageQueue();
-                        img.classList.remove('lazy-image');
-                        observer.unobserve(img);
+                },
+                setupEventListeners() {
+                    document.getElementById('cart-button').addEventListener('click', () => {
+                        if (document.getElementById('page-detail').classList.contains('active')) {
+                            this.hideProductDetail();
+                        } else {
+                            this.toggleCartModal(true);
+                        }
+                    });
+                    document.getElementById('my-orders-btn').addEventListener('click', () => this.openOrderHistoryLookup());
+                    document.getElementById('search-input').addEventListener('input', (e) => {
+                        app.state.searchQuery = e.target.value;
+                        this.renderProducts('Search Results');
+                    });
+                    document.getElementById('contact-fab').addEventListener('click', () => this.openContactModal());
+                },
+                openContactModal() {
+                    const container = document.getElementById('contact-modal');
+                    const { store_name, owner_name, store_phone } = app.db.settings;
+                    container.innerHTML = `
+                        <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-sm text-center relative">
+                            <button onclick="app.methods.toggleModal(false, 'contact-modal')" class="absolute top-2 right-2 p-2 rounded-full hover:bg-gray-100"><i data-lucide="x"></i></button>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-4">Contact Us</h2>
+                            <div class="space-y-3 text-left">
+                                <p><strong>Shop:</strong> ${store_name || 'N/A'}</p>
+                                <p><strong>Owner:</strong> ${owner_name || 'N/A'}</p>
+                                <p><strong>Mobile:</strong> <a href="tel:${store_phone}" class="text-blue-600 hover:underline">${store_phone || 'N/A'}</a></p>
+                            </div>
+                        </div>`;
+                    this.toggleModal(true, 'contact-modal');
+                    lucide.createIcons();
+                },
+                getProductByVariantId(variantId) {
+                    for (const product of app.db.products) {
+                        const variant = product.variants.find(v => v.id == variantId);
+                        if (variant) return { ...product, variant };
                     }
-                });
-            }, { rootMargin: "0px 0px 200px 0px" });
-            lazyImages.forEach(img => imageObserver.observe(img));
-        }
-
-        function showProductDetail(productId) {
-            const product = products.find(p => p.productID === productId);
-            if (!product) return;
-            const body = document.getElementById('product-detail-body');
-            body.innerHTML = `
-                <div class="flex flex-col md:flex-row gap-6">
-                    <div class="md:w-1/2">
-                        <img src="https://placehold.co/500x500/f0f0f0/333333?text=${encodeURIComponent(product.googleImageQuery)}" alt="${product.productName}" class="w-full h-auto object-cover rounded-lg">
-                    </div>
-                    <div class="md:w-1/2">
-                        <h3 class="text-3xl font-bold">${product.productName}</h3>
-                        <p class="text-slate-500 my-2">${product.category} > ${product.subCategory}</p>
-                        <p class="text-4xl font-bold my-4 text-brand-green">₹${product.price_INR}</p>
-                        <p class="text-slate-600 mb-6">${product.description}</p>
-                        <button data-product-id="${product.productID}" class="add-btn w-full bg-brand-blue text-white font-bold py-3 rounded-lg text-lg hover:bg-blue-600 transition">Add to Cart</button>
-                    </div>
-                </div>
-            `;
-            productDetailModal.classList.remove('hidden');
-            addCardEventListenersForSingleCard(body);
-        }
-        
-        async function toggleWishlist(productId) {
-            const newWishlist = [...wishlist];
-            const index = newWishlist.indexOf(productId);
-            if (index > -1) {
-                newWishlist.splice(index, 1);
-            } else {
-                newWishlist.push(productId);
+                    return null;
+                },
+                saveCart() { localStorage.setItem('saritaCart', JSON.stringify(app.state.cart)); },
+                loadCart() {
+                    const savedCart = localStorage.getItem('saritaCart');
+                    if (savedCart) app.state.cart = JSON.parse(savedCart);
+                },
+                addToCart(variantId, quantity = 1) {
+                    const product = this.getProductByVariantId(variantId);
+                    if (!product || product.variant.stock < quantity) { this.showToast('This item is out of stock.', 'error'); return; }
+                    const existingItem = app.state.cart.find(item => item.variantId === variantId);
+                    if (existingItem) {
+                        existingItem.quantity += quantity;
+                    } else {
+                        app.state.cart.push({ variantId: variantId, quantity });
+                    }
+                    this.showToast(`${product.name} (${product.variant.unit}) added to cart!`);
+                    this.saveCart();
+                    this.updateCartCount();
+                    this.updateAllActionButtons(variantId);
+                    if(document.getElementById('page-detail').classList.contains('active')){
+                         this.renderProductDetailVariants(product);
+                    }
+                },
+                updateCartQuantity(variantId, change) {
+                    const itemIndex = app.state.cart.findIndex(item => item.variantId == variantId);
+                    if (itemIndex > -1) {
+                        app.state.cart[itemIndex].quantity += change;
+                        if (app.state.cart[itemIndex].quantity <= 0) {
+                            app.state.cart.splice(itemIndex, 1);
+                        }
+                    }
+                    this.saveCart();
+                    this.updateCartCount();
+                    this.updateAllActionButtons(variantId);
+                     if(document.getElementById('page-detail').classList.contains('active')){
+                         this.renderProductDetailVariants(this.getProductByVariantId(variantId));
+                    }
+                    if (document.getElementById('checkout-modal-overlay')?.classList.contains('hidden') === false) {
+                        this.renderCheckoutStep();
+                    }
+                },
+                updateCartCount() {
+                    document.getElementById("cart-count").textContent = app.state.cart.reduce((sum, item) => sum + item.quantity, 0);
+                },
+                toggleModal(show, modalId) {
+                    const modal = document.getElementById(modalId);
+                    if (modal) modal.classList.toggle('hidden', !show);
+                },
+                toggleCartModal(show) {
+                    const container = document.getElementById('checkout-modal-overlay');
+                    if(show) {
+                        container.innerHTML = `
+                            <div class="fixed bottom-0 left-0 right-0 h-[90vh] bg-white rounded-t-2xl shadow-2xl flex flex-col max-w-sm mx-auto">
+                                <header class="p-4 border-b border-gray-200"><div class="flex justify-between items-center mb-2"><h2 id="checkout-title" class="text-lg font-bold">Your Cart</h2><button onclick="app.methods.toggleCartModal(false)"><i data-lucide="x"></i></button></div><div id="checkout-progress" class="flex space-x-2"></div></header>
+                                <main class="flex-grow overflow-y-auto p-4"><div id="checkout-step-1" class="checkout-step"></div><div id="checkout-step-2" class="checkout-step"></div><div id="checkout-step-3" class="checkout-step"></div></main>
+                                <footer class="p-4 bg-white border-t border-gray-200" id="checkout-footer"></footer>
+                            </div>`;
+                        this.resetCheckout();
+                        this.renderCheckoutStep();
+                    }
+                    this.toggleModal(show, 'checkout-modal-overlay');
+                    lucide.createIcons();
+                },
+                showProductDetail(productId) {
+                    const product = app.db.products.find(p => p.id === productId);
+                    if (!product) return;
+                    const detailPage = document.getElementById('page-detail');
+                    
+                    detailPage.innerHTML = `
+                        <div class="h-64 bg-gray-100 relative"><img src="${product.img}" class="w-full h-full object-contain"><button onclick="app.methods.hideProductDetail()" class="absolute top-4 left-4 bg-white p-2 rounded-full shadow"><i data-lucide="chevron-left"></i></button></div>
+                        <div class="p-4 space-y-4">
+                            <h2 class="text-2xl font-bold">${product.name}</h2>
+                            <p class="text-gray-600">${product.description || ''}</p>
+                            <h3 class="font-semibold text-lg">Choose Variant</h3>
+                            <div id="detail-variants-container" class="space-y-3"></div>
+                        </div>`;
+                    
+                    document.getElementById('page-main').classList.remove('active');
+                    detailPage.classList.add('active');
+                    this.renderProductDetailVariants(product);
+                    lucide.createIcons();
+                },
+                 renderProductDetailVariants(product) {
+                    const container = document.getElementById('detail-variants-container');
+                    if (!container) return;
+                    container.innerHTML = product.variants.filter(v => v.status === 'Active').map(v => `
+                        <div class="flex justify-between items-center p-3 bg-gray-100 rounded-lg">
+                            <div>
+                                <p class="font-semibold">${v.unit}</p>
+                                <p class="text-sm font-bold text-green-600">${app.db.settings.currency_symbol || '₹'}${parseFloat(v.sale_price).toFixed(2)}</p>
+                            </div>
+                            <div id="action-container-detail-${v.id}">${this.getActionButtonHTML(v.id, false, product.id)}</div>
+                        </div>`).join('');
+                     lucide.createIcons();
+                },
+                hideProductDetail() {
+                    document.getElementById('page-detail').classList.remove('active');
+                    document.getElementById('page-main').classList.add('active');
+                },
+                showToast(message, type = "success") {
+                    const toastContainer = document.getElementById("toast-notification");
+                    const colors = { success: "bg-green-500", error: "bg-red-500", info: "bg-blue-500" };
+                    const toast = document.createElement('div');
+                    toast.className = `p-4 rounded-lg shadow-lg text-white ${colors[type] || 'bg-gray-800'}`;
+                    toast.textContent = message;
+                    toastContainer.appendChild(toast);
+                    setTimeout(() => toast.classList.add('show'), 10);
+                    setTimeout(() => {
+                        toast.classList.remove('show');
+                        setTimeout(() => toast.remove(), 300);
+                    }, 3000);
+                },
+                resetCheckout() { app.state.checkout = { step: 1, name: '', phone: '', address: '' }; },
+                renderCheckoutStep() {
+                    const step = app.state.checkout.step;
+                    const titles = ["Your Cart", "Your Details", "Order Summary"];
+                    document.getElementById('checkout-title').innerText = titles[step - 1];
+                    const progressContainer = document.getElementById('checkout-progress');
+                    if(progressContainer) progressContainer.innerHTML = Array.from({length: 3}, (_, i) => `<div class="h-1.5 flex-1 rounded-full ${i < step ? 'bg-green-500' : 'bg-gray-200'}"></div>`).join('');
+                    document.querySelectorAll('.checkout-step').forEach((el, index) => el.classList.toggle('active', index + 1 === step));
+                    this.renderCheckoutStepContent(step);
+                    this.renderCheckoutFooter(step);
+                },
+                renderCheckoutStepContent(step) {
+                    const stepContainer = document.getElementById(`checkout-step-${step}`);
+                    if (!stepContainer) return;
+                    let content = '';
+                    switch (step) {
+                        case 1: 
+                            if (app.state.cart.length === 0) {
+                                content = `<div class="text-center py-12 text-gray-500"><i data-lucide="shopping-cart" class="mx-auto h-12 w-12"></i><p class="mt-2">Your cart is empty.</p></div>`;
+                            } else {
+                                content = app.state.cart.map(item => {
+                                    const product = this.getProductByVariantId(item.variantId); if (!product) return '';
+                                    return `<div class="flex items-center justify-between py-3 border-b border-gray-200"><div class="flex items-center gap-4"><img src="${product.img}" class="w-16 h-16 rounded object-contain border border-gray-200 p-1"><div><p class="font-semibold">${product.name} (${product.variant.unit})</p><p class="text-sm text-gray-500">${app.db.settings.currency_symbol || '₹'}${parseFloat(product.variant.sale_price).toFixed(2)}</p></div></div><div class="flex items-center space-x-3 bg-gray-100 font-bold rounded-full"><button onclick="app.methods.updateCartQuantity(${item.variantId}, -1)" class="p-2"><i data-lucide="minus" class="w-4 h-4"></i></button><span>${item.quantity}</span><button onclick="app.methods.updateCartQuantity(${item.variantId}, 1)" class="p-2"><i data-lucide="plus" class="w-4 h-4"></i></button></div></div>`;
+                                }).join('');
+                            }
+                            break;
+                        case 2:
+                            content = `<div class="space-y-4"><h3 class="font-semibold text-lg">Your Details</h3><div><label class="block text-sm font-medium text-gray-700">Full Name</label><input type="text" id="checkout-customer-name" value="${app.state.checkout.name}" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3"></div><div><label class="block text-sm font-medium text-gray-700">Phone Number</label><input type="tel" id="checkout-customer-phone" value="${app.state.checkout.phone}" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3" placeholder="e.g., 919876543210"></div><div><label class="block text-sm font-medium text-gray-700">Delivery Address</label><textarea id="checkout-customer-address" rows="3" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3">${app.state.checkout.address}</textarea><button onclick="app.methods.getLocation()" class="mt-2 text-sm text-blue-600 hover:underline flex items-center gap-1"><i data-lucide="map-pin" class="h-4 w-4"></i> Fetch Current Location</button></div></div>`;
+                            break;
+                        case 3:
+                            let subtotal = app.state.cart.reduce((sum, item) => sum + (item.quantity * this.getProductByVariantId(item.variantId).variant.sale_price), 0);
+                            content = `<div class="space-y-4"><h3 class="font-semibold text-lg">Review Your Order</h3><div><h4 class="font-semibold mb-2">Details</h4><div class="bg-gray-100 p-3 rounded-lg border border-gray-200 text-sm space-y-1"><p><strong>Name:</strong> ${app.state.checkout.name}</p><p><strong>Phone:</strong> ${app.state.checkout.phone}</p><p><strong>Address:</strong> ${app.state.checkout.address}</p></div></div><div><h4 class="font-semibold mb-2">Items</h4><div class="border-t border-gray-200 pt-2 space-y-2">${app.state.cart.map(item => `<div class="flex justify-between text-sm"><span>${this.getProductByVariantId(item.variantId).name} x${item.quantity}</span><span>${app.db.settings.currency_symbol || '₹'}${(item.quantity * this.getProductByVariantId(item.variantId).variant.sale_price).toFixed(2)}</span></div>`).join('')}</div></div><div class="border-t border-gray-200 pt-2 space-y-2"><div class="flex justify-between font-bold text-lg"><span>Total</span><span>${app.db.settings.currency_symbol || '₹'}${subtotal.toFixed(2)}</span></div></div></div>`;
+                            break;
+                    }
+                    stepContainer.innerHTML = content;
+                    lucide.createIcons();
+                },
+                renderCheckoutFooter(step) {
+                    const footer = document.getElementById('checkout-footer');
+                    let backButton = step > 1 ? `<button onclick="app.methods.changeCheckoutStep(-1)" class="bg-gray-200 text-gray-700 py-3 px-6 rounded-full font-bold">Back</button>` : '';
+                    let nextButton = '';
+                    if (step === 1) nextButton = app.state.cart.length > 0 ? `<button onclick="app.methods.changeCheckoutStep(1)" class="bg-green-500 text-white py-3 px-6 rounded-full font-bold flex-grow">Enter Details</button>` : '';
+                    else if (step === 2) nextButton = `<button onclick="app.methods.changeCheckoutStep(1)" class="bg-green-500 text-white py-3 px-6 rounded-full font-bold flex-grow">Review Order</button>`;
+                    else if (step === 3) nextButton = `<button onclick="app.methods.handlePlaceOrder()" class="bg-green-500 text-white py-3 px-6 rounded-full font-bold flex-grow flex items-center justify-center gap-2"><i data-lucide="send"></i>Place Order</button>`;
+                    footer.innerHTML = `<div class="flex gap-2">${backButton}${nextButton}</div>`;
+                    lucide.createIcons();
+                },
+                changeCheckoutStep(direction) {
+                    if (direction > 0 && app.state.checkout.step === 2) {
+                        app.state.checkout.name = document.getElementById('checkout-customer-name').value.trim();
+                        app.state.checkout.phone = document.getElementById('checkout-customer-phone').value.trim();
+                        app.state.checkout.address = document.getElementById('checkout-customer-address').value.trim();
+                        if (!app.state.checkout.name || !app.state.checkout.phone || !app.state.checkout.address) { this.showToast("Please fill in all your details.", "error"); return; }
+                    }
+                    app.state.checkout.step += direction;
+                    this.renderCheckoutStep();
+                },
+                async getLocation() {
+                    if (LOCATIONIQ_API_KEY === 'pk.YOUR_LOCATIONIQ_API_KEY' || !LOCATIONIQ_API_KEY) { 
+                        this.showToast('Location Service not configured.', 'error'); return;
+                    }
+                    this.showToast('Fetching location...', 'info');
+                    try {
+                        if (!navigator.geolocation) { throw new Error('Geolocation is not supported by your browser.'); }
+                        const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 }));
+                        const { latitude, longitude } = position.coords;
+                        const response = await fetch(`https://us1.locationiq.com/v1/reverse.php?key=${LOCATIONIQ_API_KEY}&lat=${latitude}&lon=${longitude}&format=json`);
+                        if (!response.ok) throw new Error('Failed to fetch address from API.');
+                        const data = await response.json();
+                        document.getElementById('checkout-customer-address').value = data.display_name || 'Could not determine address';
+                        this.showToast('Location fetched!', 'success');
+                    } catch (error) {
+                        let message = 'Could not get location. Trying IP-based fallback.';
+                        if (error && error.code) {
+                            switch (error.code) {
+                                case 1: message = "Location permission denied."; break;
+                                case 2: message = "Location information is unavailable."; break;
+                                case 3: message = "Location request timed out."; break;
+                            }
+                        } else if (error && error.message && error.message.toLowerCase().includes('policy')) {
+                            message = "Location is disabled by browser policy.";
+                        }
+                        this.showToast(message, 'error');
+                        console.error("Geolocation Error:", error);
+                        
+                        try {
+                            const ipResponse = await fetch('https://ipapi.co/json/');
+                            if(!ipResponse.ok) throw new Error("IP lookup failed");
+                            const ipData = await ipResponse.json();
+                            const fallbackAddress = `${ipData.city}, ${ipData.region}, ${ipData.country_name}`;
+                             document.getElementById('checkout-customer-address').value = fallbackAddress;
+                             this.showToast('Approximate location found via IP!', 'info');
+                        } catch (ipError){
+                             this.showToast('Could not determine location. Please enter manually.', 'error');
+                             console.error("IP Location Error:", ipError);
+                        }
+                    }
+                },
+                async handlePlaceOrder() {
+                    this.showToast('Placing your order...', 'info');
+                    const { name, phone, address } = app.state.checkout;
+                    const { data: customer, error: customerError } = await supabaseClient.from('customers').upsert({ phone, name }, { onConflict: 'phone' }).select().single();
+                    if (customerError) { console.error(customerError); this.showToast('Error saving customer info.', 'error'); return; }
+                    const total = app.state.cart.reduce((sum, item) => sum + (item.quantity * this.getProductByVariantId(item.variantId).variant.sale_price), 0);
+                    const orderPayload = { customer_id: customer.id, customer_details: { name, phone, address }, total, status: 'Pending' };
+                    const { data: order, error: orderError } = await supabaseClient.from('orders').insert(orderPayload).select().single();
+                    if (orderError) { console.error(orderError); this.showToast('Could not create order.', 'error'); return; }
+                    const orderItemsPayload = app.state.cart.map(item => ({ order_id: order.id, variant_id: item.variantId, quantity: item.quantity, price_at_purchase: this.getProductByVariantId(item.variantId).variant.sale_price, item_details: { name: this.getProductByVariantId(item.variantId).name, unit: this.getProductByVariantId(item.variantId).variant.unit } }));
+                    const { error: itemsError } = await supabaseClient.from('order_items').insert(orderItemsPayload);
+                    if (itemsError) { console.error(itemsError); this.showToast('Error saving order items.', 'error'); return; }
+                    this.showToast('Order placed successfully! Thank you.', 'success');
+                    app.state.cart = [];
+                    this.saveCart();
+                    this.renderAll();
+                    this.toggleCartModal(false);
+                },
+                openOrderHistoryLookup() {
+                    const container = document.getElementById('order-history-lookup-modal');
+                    container.innerHTML = `<div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-sm relative"><button onclick="app.methods.toggleModal(false, 'order-history-lookup-modal')" class="absolute top-2 right-2 p-2 rounded-full hover:bg-gray-100"><i data-lucide="x"></i></button><h2 class="text-2xl font-bold text-center text-gray-800 mb-2">My Orders</h2><p class="text-center text-sm text-gray-500 mb-6">Enter your phone number to find your past orders.</p><form id="order-history-lookup-form"><div class="mb-4"><label for="order-history-phone" class="block text-gray-700 text-sm font-bold mb-2">Phone Number</label><input type="tel" id="order-history-phone" class="shadow appearance-none border rounded w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required placeholder="e.g. 919876543210"></div><button type="submit" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-full w-full">Find My Orders</button></form></div>`;
+                    document.getElementById('order-history-lookup-form').onsubmit = (e) => this.handleOrderHistoryLookup(e);
+                    this.toggleModal(true, 'order-history-lookup-modal');
+                    lucide.createIcons();
+                },
+                async handleOrderHistoryLookup(e) {
+                    e.preventDefault();
+                    const phone = document.getElementById('order-history-phone').value; if (!phone) return;
+                    this.showToast('Searching for your orders...', 'info');
+                    const { data: orders, error } = await supabaseClient.from('orders').select('*, order_items(*)').eq('customer_details->>phone', phone).order('created_at', { ascending: false });
+                    if (error) { this.showToast('Could not find orders.', 'error'); console.error(error); return; }
+                    this.toggleModal(false, 'order-history-lookup-modal');
+                    if (orders.length > 0) {
+                        this.renderOrderHistory(orders);
+                        this.toggleModal(true, 'order-history-display-modal');
+                    } else { this.showToast('No orders found for that phone number.', 'info'); }
+                },
+                renderOrderHistory(orders) {
+                    const container = document.getElementById('order-history-display-modal');
+                    container.innerHTML = `<div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"><header class="p-4 border-b border-gray-200 flex justify-between items-center"><h2 class="text-xl font-bold text-gray-800">Your Order History</h2><button onclick="app.methods.toggleModal(false, 'order-history-display-modal')"><i data-lucide="x"></i></button></header><main class="flex-grow p-4 overflow-y-auto space-y-4">${orders.map(order => `<div class="bg-gray-50 border border-gray-200 p-4 rounded-lg"><div class="flex justify-between items-start border-b border-gray-200 pb-2 mb-2"><div><p class="font-bold">Order #${order.id}</p><p class="text-xs text-gray-500">${new Date(order.created_at).toLocaleDateString()}</p></div><span class="px-2 py-1 text-xs rounded-full ${order.status === 'Delivered' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">${order.status}</span></div><div class="text-sm space-y-1 mb-3">${order.order_items.map(item => `<div class="flex justify-between"><span>${item.item_details.name} (x${item.quantity})</span><span>${app.db.settings.currency_symbol}${(item.price_at_purchase * item.quantity).toFixed(2)}</span></div>`).join('')}</div><div class="flex justify-between items-center border-t border-gray-200 pt-2"><span class="font-bold text-lg">Total: ${app.db.settings.currency_symbol}${parseFloat(order.total).toFixed(2)}</span></div></div>`).join('')}</main></div>`;
+                    lucide.createIcons();
+                },
             }
-            await setDoc(userDataRef, { wishlist: newWishlist }, { merge: true });
-            
-            if(!wishlistView.classList.contains('hidden')) {
-                renderWishlist();
-            }
-        }
-        
-        function updateWishlistHeartIcons() {
-             document.querySelectorAll('.wishlist-heart-btn').forEach(btn => {
-                const productId = btn.dataset.productId;
-                const svg = btn.querySelector('svg');
-                if (wishlist.includes(productId)) {
-                    svg.classList.add('text-red-500', 'fill-current');
-                    svg.classList.remove('text-slate-400');
-                } else {
-                    svg.classList.remove('text-red-500', 'fill-current');
-                    svg.classList.add('text-slate-400');
-                }
-            });
-        }
+        };
 
-        function renderWishlist() {
-            const container = document.getElementById('wishlist-product-grid');
-            const wishlistProducts = products.filter(p => wishlist.includes(p.productID));
-
-            if (wishlistProducts.length === 0) {
-                container.innerHTML = `<p class="col-span-full text-center text-slate-500">Your wishlist is empty. Click the heart icon on products to add them!</p>`;
-                return;
-            }
-            container.innerHTML = wishlistProducts.map(p => createProductCard(p)).join('');
-            addCardEventListeners();
-            lazyLoadImages();
-        }
-
-        function renderProductManagement() {
-            const container = document.getElementById('admin-product-list');
-            const sortedProducts = [...products].sort((a,b) => a.productName.localeCompare(b.productName));
-            container.innerHTML = sortedProducts.map(p => `
-                <tr class="bg-white border-b">
-                    <td class="px-6 py-4 font-medium text-slate-900">${p.productName}</td>
-                    <td class="px-6 py-4">${p.category}</td>
-                    <td class="px-6 py-4">₹${p.price_INR}</td>
-                    <td class="px-6 py-4">${p.stockStatus}</td>
-                    <td class="px-6 py-4 flex space-x-2">
-                        <button class="edit-product-btn text-brand-blue font-semibold" data-product-id="${p.productID}">Edit</button>
-                        <button class="delete-product-btn text-red-500 font-semibold" data-product-id="${p.productID}">Delete</button>
-                    </td>
-                </tr>
-            `).join('');
-            document.querySelectorAll('.edit-product-btn').forEach(b => b.addEventListener('click', (e) => showProductForm(e.target.dataset.productId)));
-            document.querySelectorAll('.delete-product-btn').forEach(b => b.addEventListener('click', (e) => handleDeleteProduct(e.target.dataset.productId)));
-        }
-
-        function showProductForm(productId = null) {
-            const form = document.getElementById('product-form');
-            form.reset();
-            const title = document.getElementById('product-form-title');
-            if (productId) {
-                const product = products.find(p => p.productID === productId);
-                title.textContent = "Edit Product";
-                document.getElementById('product-id-input').value = product.productID;
-                document.getElementById('productName').value = product.productName;
-                document.getElementById('category').value = product.category;
-                document.getElementById('subCategory').value = product.subCategory;
-                document.getElementById('description').value = product.description;
-                document.getElementById('price_INR').value = product.price_INR;
-                document.getElementById('googleImageQuery').value = product.googleImageQuery;
-                document.getElementById('stockStatus').value = product.stockStatus;
-            } else {
-                title.textContent = "Add New Product";
-                document.getElementById('product-id-input').value = '';
-            }
-            productFormModal.classList.remove('hidden');
-        }
-
-        async function handleSaveProduct(e) {
-            e.preventDefault();
-            const id = document.getElementById('product-id-input').value;
-            const productData = {
-                productName: document.getElementById('productName').value,
-                category: document.getElementById('category').value,
-                subCategory: document.getElementById('subCategory').value,
-                description: document.getElementById('description').value,
-                price_INR: Number(document.getElementById('price_INR').value),
-                googleImageQuery: document.getElementById('googleImageQuery').value,
-                stockStatus: document.getElementById('stockStatus').value,
-            };
-
-            const productId = id || `SVGS-NEW-${Date.now()}`;
-            const productRef = doc(productsRef, productId);
-            await setDoc(productRef, { productID: productId, ...productData }, { merge: true });
-
-            productFormModal.classList.add('hidden');
-            // UI will update automatically via onSnapshot
-        }
-
-        async function handleDeleteProduct(productId) {
-            // Replaced window.confirm with a simple confirmation for this environment.
-            // In a real app, you'd build a custom modal for this.
-            if (prompt('Type DELETE to confirm product deletion.') === 'DELETE') {
-                 const productRef = doc(productsRef, productId);
-                 await deleteDoc(productRef);
-            }
-        }
-        
-        function renderSettings() {
-            document.getElementById('delivery-charge-input').value = storeSettings.deliveryCharge;
-        }
-
-        async function handleSaveSettings() {
-            const newCharge = Number(document.getElementById('delivery-charge-input').value) || 0;
-            await setDoc(settingsRef, { deliveryCharge: newCharge }, { merge: true });
-            // A simple notification; a more robust app would use a toast notification.
-            const btn = document.getElementById('save-settings-btn');
-            const originalText = btn.textContent;
-            btn.textContent = 'Saved!';
-            setTimeout(() => { btn.textContent = originalText; }, 2000);
-        }
+        document.addEventListener('DOMContentLoaded', () => app.methods.init());
     </script>
 </body>
 </html>
+
